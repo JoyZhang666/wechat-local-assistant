@@ -1,6 +1,6 @@
 SOURCE PRERELEASE — EXPERIMENTAL WINDOWS COMPATIBILITY
 
-Version: v1.13.0-rc.1
+Version: v1.13.0-rc.2
 
 This source package was built from an explicit file allowlist.
 It excludes private configuration, keys, chat data, reports, models, runtime,

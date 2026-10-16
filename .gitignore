@@ -17,6 +17,7 @@ jobs/
 reports/
 exports/
 *.dpapi
+*.onboarding.json
 *.db
 *.db-wal
 *.db-shm
