@@ -85,8 +85,8 @@ class AccessTests(unittest.TestCase):
             root=Path(temp);base=root/'python-base';base.mkdir();prefix=root/'.venv';scripts=prefix/'Scripts';scripts.mkdir(parents=True)
             for name in ('python.exe','pythonw.exe','python312.dll'):(base/name).write_bytes(name.encode())
             with patch('wechat_local.local_runtime.sys.prefix',str(prefix)),patch('wechat_local.local_runtime.sys.base_prefix',str(base)):
-                self.assertEqual(initialize(root),scripts/'python-local-only.exe')
-                self.assertEqual(initialize(root),scripts/'python-local-only.exe')
+                self.assertEqual(initialize(root),(scripts/'python-local-only.exe').resolve())
+                self.assertEqual(initialize(root),(scripts/'python-local-only.exe').resolve())
                 (scripts/'python-local-only.exe').write_bytes(b'previous image')
                 with self.assertRaises(ValueError):initialize(root)
                 self.assertEqual((scripts/'python-local-only.exe').read_bytes(),b'previous image')
