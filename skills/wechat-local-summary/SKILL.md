@@ -5,7 +5,7 @@ description: 使用已安装的 Windows 微信助手界面，检查配置并处�
 
 # 本地微信摘要
 
-版本：v1.13.0-rc.1；更新：2026-10-16（Asia/Shanghai）；源码预发行候选。
+版本：v1.13.0-rc.2；更新：2026-10-16（Asia/Shanghai）；源码预发行候选。
 
 用于配套应用的安装检查、启动和指定任务操作。此 Skill 不包含模型或用户数据；应用含MIT内置读取后端，但用户仍须明确授权并在本机导入自己的数据库密钥。先找到应用根目录并读取`README.md`（开发目录为`README.public.md`）及`docs/public-install.md`。不要根据Skill位置猜测应用已安装。
 

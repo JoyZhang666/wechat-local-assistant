@@ -121,6 +121,8 @@ class App:
         ttk.Label(header,text="微信本地助手",font=("Microsoft YaHei UI",18,"bold")).pack(side="left")
         self.guide_button=ttk.Button(header,text="使用说明",style="Quiet.TButton",command=self.toggle_guide)
         self.guide_button.pack(side="right")
+        self.onboarding_button=ttk.Button(header,text="新手引导",command=self.show_onboarding)
+        self.onboarding_button.pack(side="right",padx=px((0,8)))
         guide=ttk.Frame(self.root,padding=px((16,0,16,8)))
         guide.pack(fill="x")
         self.guide_label=ttk.Label(guide,text="左侧配置模型、勾选聊天 → 右侧选择时间、预览数量 → 生成摘要或导出 → 阅读与保存。",foreground=muted)
@@ -346,6 +348,17 @@ class App:
         else:
             self.saved_location_entry.pack_forget()
         self.layout_result_actions()
+
+    def show_onboarding(self,automatic=False):
+        from .onboarding import Onboarding,load_state
+        path=self.config_path.with_suffix(".onboarding.json")
+        if automatic and load_state(path).get("seen"):
+            return
+        existing=getattr(self,"onboarding",None)
+        if existing and existing.window.winfo_exists():
+            existing.window.lift()
+            return
+        self.onboarding=Onboarding(self,path)
 
     def toggle_guide(self):
         if getattr(self,"guide_window",None) and self.guide_window.winfo_exists():
@@ -978,7 +991,7 @@ class App:
                 self.cleanup_job(self.prepared)
             self.root.destroy()
 
-    def configure(self):
+    def configure(self,initial_tab=None):
         if self.active:
             return
         window=tk.Toplevel(self.root)
@@ -1155,6 +1168,8 @@ class App:
             except Exception as error:
                 messagebox.showerror("配置无效",str(error),parent=window)
         ttk.Button(content,text="保存配置（不发送聊天）",command=save).pack(anchor="e")
+        if initial_tab:
+            tabs.select(reader_tab if initial_tab=="reader" else {"local":local_tab,"cloud":cloud_tab,"membership":member_tab}.get(backend.get(),local_tab))
 
     def update_model_label(self):
         self.model_label.set("文字摘要：会员 · "+(self.settings.membership_model or "登录后选模型") if self.settings.model_backend=="membership"
@@ -1172,7 +1187,8 @@ def launch(config_path):
     try:
         with NamedMutex(r"Local\WechatLocalSummaryUI"):
             root=tk.Tk()
-            App(root,config_path)
+            app=App(root,config_path)
+            root.after(300,lambda:app.show_onboarding(automatic=True))
             root.mainloop()
     except Exception as error:
         root=tk.Tk()

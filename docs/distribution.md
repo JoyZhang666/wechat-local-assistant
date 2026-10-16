@@ -1,12 +1,12 @@
 # 构建与分发
 
-版本：v1.13.0-rc.1；源码预发行候选；2026-10-16（Asia/Shanghai）。
+版本：v1.13.0-rc.2；源码预发行候选；2026-10-16（Asia/Shanghai）。
 
 `src/wechat_local/__init__.py`是软件版本的唯一代码来源，CLI／状态／构建引用它。历史版本不重写，依赖版本独立管理。
 
 ```powershell
 python scripts/build_public_source.py --check
-python scripts/build_public_source.py --output outputs/public/wechat-local-assistant-v1.13.0-rc.1.zip
+python scripts/build_public_source.py --output outputs/public/wechat-local-assistant-v1.13.0-rc.2.zip
 ```
 
 固定白名单仅含程序、公开文档、合成测试、最小CI和许可证；公开README映射为根`README.md`。不包含开发历史、运行目录、原供应包、模型、虚拟环境、DLL、真实资料和旧交付。输出不覆盖旧包，不上传、不安装、不注册后台任务。
