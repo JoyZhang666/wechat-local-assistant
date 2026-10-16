@@ -1,0 +1,18 @@
+{
+  "data_dir": "%LOCALAPPDATA%/WechatLocalAssistant",
+  "provider_backend": "builtin",
+  "provider_dir": "",
+  "ollama_executable": "C:/path/to/official/ollama.exe",
+  "model_dir": "C:/path/to/local/ollama/models",
+  "model": "replace-with-your-installed-model-tag",
+  "asr_model_dir": null,
+  "port": 11534,
+  "expected_version": "0.40.1",
+  "model_backend": "local",
+  "cloud_base_url": "",
+  "cloud_model": "",
+  "cloud_key_dpapi": "",
+  "cloud_timeout": 180,
+  "membership_account": "",
+  "membership_model": ""
+}

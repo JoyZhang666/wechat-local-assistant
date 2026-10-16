@@ -1,0 +1,2 @@
+# Optional WeChat SILK decoding. ASR executable and weights are separate.
+silk-python==0.2.8

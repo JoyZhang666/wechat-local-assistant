@@ -1,0 +1,6 @@
+# Standalone Python 3.12 on Windows; tkinter is included in standard Python.
+psutil==7.1.0
+zstandard==0.25.0
+Pillow==12.3.0
+pycryptodome==3.24.0
+# A user-supplied WeChat provider may have additional dependencies.

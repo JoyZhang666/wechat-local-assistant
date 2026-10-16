@@ -1,0 +1,5 @@
+# Optional local CPU VAD for ASR; not required by the GUI/text-only installation.
+# Model weights and llama.cpp executables are deployed separately, not by pip.
+numpy==2.5.3
+sherpa-onnx==1.13.8
+sherpa-onnx-core==1.13.8
