@@ -1,0 +1,13 @@
+{
+  "executable": "llama/llama-mtmd-cli.exe",
+  "model": "Qwen3-ASR-1.7B-Q8_0.gguf",
+  "mmproj": "mmproj-Qwen3-ASR-1.7B-Q8_0.gguf",
+  "device": "none",
+  "runtime_version": "b11516",
+  "model_revision": "36a678687ba7d07a74ca70ccb0e36902e005fb80",
+  "sha256": {
+    "executable": "REPLACE_WITH_VERIFIED_EXECUTABLE_SHA256",
+    "model": "58e22d0532d4eacaf034cfac17a6fed159f37c41390c710186783be439d1fc57",
+    "mmproj": "46c1d533af3f354ceb37ce855dbceff7da7fa7cf1e6a523df3b13440bd164c0d"
+  }
+}

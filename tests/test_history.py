@@ -35,6 +35,24 @@ def database(path):
 
 
 class HistoryTests(unittest.TestCase):
+    def test_compressed_message_limit_never_returns_truncated_text(self):
+        import zstandard
+        from unittest.mock import patch
+        from wechat_local.history import _decode_text
+        compressed=zstandard.ZstdCompressor().compress(b'x'*2000)
+        with patch('wechat_local.history.MAX_MESSAGE_BYTES',1024):
+            with self.assertRaisesRegex(HistoryError,'超限'):_decode_text(compressed,4,'')
+            with self.assertRaisesRegex(HistoryError,'限额'):_decode_text('x'*1025,0,'')
+        self.assertEqual(_decode_text(compressed,4,''),'x'*2000)
+
+    def test_xml_entities_are_rejected_before_parser(self):
+        from unittest.mock import patch
+        from wechat_local.raw_history import _xml_payload
+        with patch('wechat_local.raw_history.ET.fromstring') as parse:
+            with self.assertRaisesRegex(HistoryError,'实体'):
+                _xml_payload('<!DOCTYPE msg [<!ENTITY x "synthetic">]><msg>&x;</msg>')
+        parse.assert_not_called()
+
     def setUp(self):
         self.folder = tempfile.TemporaryDirectory(prefix="wechat-synthetic-")
         self.addCleanup(self.folder.cleanup)

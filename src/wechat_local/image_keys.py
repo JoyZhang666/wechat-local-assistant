@@ -2,7 +2,7 @@
 import json
 from pathlib import Path
 import re
-from .common import atomic_json,read_json
+from .common import NamedMutex,atomic_json,read_json
 from .credentials import protect_key,reveal_key
 from .export import _plain
 
@@ -24,10 +24,13 @@ class ImageKeyStore:
         self.path=Path(data_dir)/'image-keys'/'v2.json'
         _plain(self.path)
 
-    def save(self,value,xor=None):
+    def save(self,value,xor=None,*,replace=True):
         parsed=image_key(value,xor)
         secret=json.dumps({'aes':parsed['aes'].hex(),'xor':xor})
-        atomic_json(self.path,{'version':1,'dpapi':protect_key(secret)})
+        with NamedMutex(r'Local\WechatLocalImageKeySave'):
+            _plain(self.path)
+            if not replace and self.path.exists():raise ValueError('已有图片授权，未覆盖。')
+            atomic_json(self.path,{'version':1,'dpapi':protect_key(secret)})
 
     def load(self):
         _plain(self.path)

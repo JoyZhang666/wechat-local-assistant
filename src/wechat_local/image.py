@@ -11,6 +11,8 @@ import struct
 HASH = re.compile(r"^[0-9a-fA-F]{32}$")
 IMAGE_NAME = re.compile(r"^([0-9a-fA-F]{32})(?:_[hHtTwW])?\.(?:dat|png|jpg|jpeg|gif|webp|bmp)$", re.I)
 V2 = b"\x07\x08\x56\x32\x08\x07"
+MAX_IMAGE_BYTES = 64*1024*1024
+MAX_IMAGE_PIXELS = 40_000_000
 PNG = b"\x89PNG\r\n\x1a\n"
 SIGNATURES = [PNG, b"\xff\xd8\xff", b"GIF87a", b"GIF89a", b"BM", b"RIFF"]
 
@@ -54,12 +56,16 @@ def _quality(name):
 
 
 def _verified_extension(data):
+    if len(data)>MAX_IMAGE_BYTES:
+        raise ImageError("image_size_exceeded","图片文件超限，未解码或调用模型。")
     try:
         from PIL import Image
     except ImportError:
         raise ImageError("image_dependency_missing", "本机图片验证组件未安装。") from None
     try:
         with Image.open(BytesIO(data)) as image:
+            if image.width*image.height>MAX_IMAGE_PIXELS:
+                raise ImageError("image_pixels_exceeded","图片像素超限，未加载全部像素或调用模型。")
             extension = {"JPEG": "jpg", "PNG": "png", "GIF": "gif", "WEBP": "webp",
                          "BMP": "bmp"}.get(image.format)
             if not extension:
@@ -236,7 +242,12 @@ def _selected_image_asset(account_root, message, outdir,*,image_keys=None):
     candidates = [path for path in candidates if tiers[_quality(path.name)] == best_tier]
     sources = {}
     for candidate in candidates:
-        data = candidate.read_bytes()
+        if candidate.stat().st_size>MAX_IMAGE_BYTES:
+            raise ImageError("image_size_exceeded","图片文件超限，原件保留在微信中，未读取或调用模型。")
+        with candidate.open("rb") as handle:
+            data=handle.read(MAX_IMAGE_BYTES+1)
+        if len(data)>MAX_IMAGE_BYTES:
+            raise ImageError("image_size_exceeded","图片文件在读取时超限，未解码。")
         sources.setdefault(hashlib.sha256(data).digest(), (candidate, data))
     if len(sources) != 1:
         raise ImageError("image_conflict", "多个精确候选文件内容不同，未猜测附件。")

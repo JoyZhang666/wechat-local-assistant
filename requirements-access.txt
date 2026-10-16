@@ -1,0 +1,2 @@
+# Optional, explicit first-use database access only; no background extraction.
+frida==17.23.1

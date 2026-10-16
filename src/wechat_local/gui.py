@@ -153,6 +153,8 @@ class App:
         self.model_status_label.bind("<Configure>",lambda e:self.model_status_label.configure(wraplength=max(120,e.width)))
         self.config_button=ttk.Button(connection,text="选择模型与连接方式",command=self.configure)
         self.config_button.pack(fill="x")
+        self.runtime_button=ttk.Button(connection,text="初始化本项目运行程序",style="Quiet.TButton",command=self.initialize_runtime)
+        self.runtime_button.pack(fill="x",pady=px((6,0)))
         model_actions=ttk.Frame(connection,style="Card.TFrame")
         model_actions.pack(fill="x",pady=px((6,0)))
         model_actions.columnconfigure(0,weight=1)
@@ -349,6 +351,16 @@ class App:
             self.saved_location_entry.pack_forget()
         self.layout_result_actions()
 
+    def initialize_runtime(self):
+        if self.active:
+            return
+        try:
+            from .local_runtime import initialize
+            initialize()
+            self.status.set("项目运行程序已初始化。未修改防火墙；默认调用本机不等于已强制阻断外网。")
+        except (OSError,ValueError) as error:
+            messagebox.showerror("初始化未完成",str(error),parent=self.root)
+
     def show_onboarding(self,automatic=False):
         from .onboarding import Onboarding,load_state
         path=self.config_path.with_suffix(".onboarding.json")
@@ -543,7 +555,7 @@ class App:
             return
         python=Path(sys.executable).with_name("python-local-only.exe")
         if not python.is_file():
-            messagebox.showinfo("本机安装未完成","请先创建专属启动器并验证外网阻断，再处理私有聊天。",parent=self.root)
+            messagebox.showinfo("本机安装未完成","请先点击“一、模型 → 初始化本项目运行程序”，再重试。此操作不修改Windows防火墙。",parent=self.root)
             return
         self.job_id=job_id
         self.active_command=command
@@ -983,6 +995,12 @@ class App:
             self.active.cancel()
 
     def close(self):
+        accesses=[getattr(self,name,None) for name in ("access_dialog","image_access_dialog")]
+        busy=[access for access in accesses if access and access.busy]
+        if busy:
+            for access in busy:access.stop.set()
+            self.root.after(150,self.close)
+            return
         if self.active:
             self.closing=True
             self.cancel()
@@ -1014,11 +1032,19 @@ class App:
         reader_backend=tk.StringVar(value=values.get("provider_backend","external" if values.get("provider_dir") else "builtin"))
         for value,label in (("builtin","内置MIT读取后端（新安装推荐）"),("external","兼容已有外置读取组件")):
             ttk.Radiobutton(reader_tab,text=label,variable=reader_backend,value=value).pack(anchor="w",fill="x",pady=4)
-        ttk.Label(reader_tab,text="先保存本机配置，再导入本人账号的数据库密钥。安装不会提取密钥或附加微信；需要提取时须另行了解风险并授权。数据库密钥与图片密钥不同。",wraplength=600).pack(anchor="w",pady=8)
+        ttk.Label(reader_tab,text="先保存本机配置。推荐由程序协助本人账号首次接入，不需要复制密钥；只有点击接入并明确授权后才会临时附加微信。手动导入仅作高级备用。数据库密钥与图片密钥不同。",wraplength=600).pack(anchor="w",pady=8)
         reader_root=tk.StringVar()
         reader_account=tk.StringVar()
         reader_key=tk.StringVar()
         reader_consent=tk.BooleanVar(value=False)
+        def assist_access():
+            from .access_ui import AccessDialog
+            existing=getattr(self,"access_dialog",None)
+            if existing and existing.window.winfo_exists():
+                existing.window.lift()
+                return
+            self.access_dialog=AccessDialog(self,window,reader_root,reader_account)
+        ttk.Button(reader_tab,text="协助接入本人微信（推荐）",style="Primary.TButton",command=assist_access).pack(fill="x",pady=8)
         for title,var,hidden in (("本人账号目录（含db_storage）",reader_root,False),("本人账号ID（不是昵称）",reader_account,False),("已授权数据库密钥（64位十六进制）",reader_key,True)):
             ttk.Label(reader_tab,text=title).pack(anchor="w")
             row=ttk.Frame(reader_tab)
@@ -1099,7 +1125,15 @@ class App:
             ttk.Entry(row,textvariable=var,width=55).pack(side="left",fill="x",expand=True)
         image_tab=ttk.Frame(tabs,padding=12)
         tabs.add(image_tab,text="图片解码")
-        ttk.Label(image_tab,text="新版微信的V2图片使用独立图片密钥，与数据库密钥、会员授权不同。\n只在本机填写；程序不自动附加微信、不上传密钥。没有密钥时仍保留加密原件并标注缺失。",wraplength=600).pack(anchor="w",pady=(0,12))
+        ttk.Label(image_tab,text="新版微信V2图片使用独立密钥。推荐先尝试离线接入：由你选本人账号目录和2—9张不同加密JPEG图片，单独授权后本机验证。不会附加微信、不上传；不支持时停止。手动填写仅作高级备用。",wraplength=600).pack(anchor="w",pady=(0,12))
+        def assist_images():
+            from .image_access_ui import ImageAccessDialog
+            existing=getattr(self,"image_access_dialog",None)
+            if existing and existing.window.winfo_exists():
+                existing.window.lift()
+                return
+            self.image_access_dialog=ImageAccessDialog(self,window)
+        ttk.Button(image_tab,text="协助接入图片（离线验证）",style="Primary.TButton",command=assist_images).pack(fill="x",pady=(0,12))
         image_aes=tk.StringVar()
         image_xor=tk.StringVar()
         for title,var,hidden in (("AES密钥（16字符／32位十六进制）",image_aes,True),("XOR值（0—255；未知可留空）",image_xor,False)):

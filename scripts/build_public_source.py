@@ -19,7 +19,7 @@ REQUIRED = (
     "README.md", "config.example.json", "requirements-gui.txt", "requirements-asr.txt", "requirements-voice.txt",
     "scripts/wechat_ui.py", "scripts/create_gui_launcher.py", "scripts/build_public_source.py",
     "scripts/cloud_api_worker.py",
-    "requirements-membership.txt",
+    "requirements-membership.txt", "requirements-access.txt", "config/asr-runtime.example.json",
     "skills/wechat-local-summary/SKILL.md", "docs/distribution.md",
     "third_party/wechat-decrypt/LICENSE", "third_party/wechat-decrypt/NOTICE.md",
     ".github/workflows/tests.yml", "tests/test_builtin_provider.py", "tests/test_release.py",
@@ -29,7 +29,7 @@ OPTIONAL = (
     "docs/public-install.md", "tests/test_history.py", "tests/test_selected_summary.py",
     "tests/test_gui_workflow.py", "tests/test_model_runtime.py", "tests/test_export.py",
     "tests/test_media.py", "tests/test_voice.py", "tests/test_image.py", "tests/test_asr.py",
-    "tests/test_onboarding.py",
+    "tests/test_onboarding.py", "tests/test_first_access.py", "tests/test_image_access.py", "docs/first-access.md",
     "tests/test_bundle.py", "tests/test_cloud.py", "tests/test_membership.py", "tests/test_summary_reading.py", "tests/test_summary_structure.py", "tests/test_media_summary.py",
 )
 SOURCE_VERSION = "v" + __version__

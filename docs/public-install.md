@@ -1,6 +1,6 @@
 # Windows安装与首次接入
 
-版本：v1.13.0-rc.2；2026-10-16（Asia/Shanghai）；源码预发行。
+版本：v1.13.0-rc.3；2026-10-17（Asia/Shanghai）；源码预发行。
 
 ## 安装
 
@@ -9,10 +9,11 @@
 ```powershell
 python -m venv .venv
 .venv\Scripts\python.exe -m pip install -r requirements-gui.txt
-.venv\Scripts\python.exe scripts/wechat_ui.py gui
+.venv\Scripts\python.exe scripts/create_gui_launcher.py --initialize-only --config "$env:LOCALAPPDATA/WechatLocalAssistant/settings.json"
+.venv\Scripts\pythonw-local-only.exe scripts/wechat_ui.py gui
 ```
 
-会员模式另装`requirements-membership.txt`；SILK语音解码另装`requirements-voice.txt`；可选Silero CPU VAD另装`requirements-asr.txt`。模型与ASR权重不自动下载；不部署它们仍可启动界面、测试云端纯文字。
+第三步不能省略：只创建本项目专用Python和必要运行库，不修改防火墙或自启；已有文件版本不同拒绝覆盖。已打开界面也可点击“一、模型 → 初始化本项目运行程序”。辅助接入另装`requirements-access.txt`；会员另装`requirements-membership.txt`；SILK另装`requirements-voice.txt`；可选Silero CPU VAD另装`requirements-asr.txt`。均使用本项目venv的pip；不自动下载模型。
 
 ## 六步新手引导
 
@@ -26,9 +27,9 @@ python -m venv .venv
 
 先在“选择模型与连接方式”保存私人数据目录及所选模型设置；“微信首次接入”选内置后端，保存后重新打开。
 
-选择本人账号目录，其下应有`db_storage/contact/contact.db`、`session/session.db`及`message/message_*.db`。填本人账号ID（不是昵称、也不是带设备后缀的目录名）、已获授权的64位十六进制数据库密钥，勾选本次接入确认，点击验证导入。联系人和会话认证、结构验证通过后才DPAPI保存；错误不覆盖原授权。然后刷新聊天。
+推荐点击“协助接入本人微信”：本人选择目录（下含`db_storage`）及官方Weixin.exe，单独确认本次临时附加授权；由本人正常退出、重开微信，限时验证后DPAPI保存。程序不强制退出、不自动提权、不常驻，失败或取消保留原授权。具体范围及步骤见[首次接入与媒体组件](first-access.md)。
 
-用户自行合法取得密钥；应用不提供自动提取，不自动附加／注入微信。提取可能影响客户端稳定性，需要另行说明和授权；开发机许可不适用于新用户。不要经命令行、聊天或Issue传递密钥。
+手动密钥导入仅为高级备用：填写本人ID及已授权64位十六进制密钥，并确认；账号ID必须与所选目录绑定。安装、引导导航不执行取钥；每次接入需重新授权，开发机许可不适用新用户。挂钩可能影响稳定性，客户端兼容仍需实测。不要经命令行、聊天或Issue传递密钥。
 
 已有部署可选外置后端，保留原读取组件目录；使用者自行核验其许可与兼容。公开版不附其DLL。
 
@@ -48,9 +49,9 @@ python -m venv .venv
 
 ## 媒体
 
-图片密钥与数据库密钥独立，在“图片解码”页填写并DPAPI保存。格式／像素验证通过才显示；仅缩略图、缺密钥或不支持的WXGF等容器会标缺口。不会从预览窗口自动取钥。
+图片密钥与数据库密钥独立。“图片解码”页提供单独授权的离线接入：本人选择账号目录及2—9张兼容V2加密JPEG样本，验证通过后DPAPI保存，不读取微信进程；手动入口保留。不匹配的旧授权不自动覆盖。仅缩略图、缺密钥或不支持的容器会标缺口。
 
-图片理解需要支持视觉的本地模型及对应组件，只有文字标签不保证支持视觉。语音需SILK解码、ASR程序和权重。参考路线为Qwen3-ASR-1.7B Q8 GGUF、匹配audio projector及llama.cpp b11516 Windows Vulkan预览程序；接口见`src/wechat_local/asr.py`。`asr_model_dir/runtime.json`由用户单独核验，含执行程序、权重及哈希；可选`vad_model`启用Silero CPU门禁。模型可能误拒人声，须保留录音复核。
+图片理解需要视觉模型及匹配组件。语音需SILK解码、ASR程序和权重；Qwen3-ASR-1.7B Q8 GGUF、projector及llama.cpp b11516 Windows Vulkan部署与SHA-256配置见[媒体组件步骤](first-access.md#可选qwen语音组件)和[模板](../config/asr-runtime.example.json)。配置哈希存在时会在ASR启动前核验；未配置哈希的旧部署保持兼容，不视为已校验。模型可能误拒人声，保留原录音复核。
 
 本版无一键ASR安装器，不附权重、程序或开发机runtime配置；未部署时保留消息与媒体、标识别未完成。模型及软件分别适用自己的许可证。
 

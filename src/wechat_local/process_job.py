@@ -38,20 +38,30 @@ class ProcessJob:
         limits=_Extended()
         limits.BasicLimitInformation.LimitFlags=0x2000  # KILL_ON_JOB_CLOSE
         if not self.kernel.SetInformationJobObject(self.handle,9,ctypes.byref(limits),ctypes.sizeof(limits)):
+            error=ctypes.WinError(ctypes.get_last_error())
             self.close()
-            raise ctypes.WinError(ctypes.get_last_error())
-        self.process=subprocess.Popen(command,stdin=subprocess.PIPE,stdout=subprocess.PIPE,
-            stderr=stderr,text=True,encoding="utf-8",creationflags=subprocess.CREATE_NO_WINDOW)
-        # Worker waits for RUN. It cannot start a model before job ownership exists.
-        if not self.kernel.AssignProcessToJobObject(self.handle,int(self.process._handle)):
-            error=ctypes.get_last_error()
-            self.process.kill()
-            self.process.wait(10)
+            raise error
+        self.process=None
+        try:
+            self.process=subprocess.Popen(command,stdin=subprocess.PIPE,stdout=subprocess.PIPE,
+                stderr=stderr,text=True,encoding="utf-8",creationflags=subprocess.CREATE_NO_WINDOW)
+            # Worker waits for RUN. It cannot start a model before job ownership exists.
+            if not self.kernel.AssignProcessToJobObject(self.handle,int(self.process._handle)):
+                raise ctypes.WinError(ctypes.get_last_error())
+            self.process.stdin.write("RUN\n")
+            self.process.stdin.flush()
+            self.process.stdin.close()
+        except BaseException:
             self.close()
-            raise ctypes.WinError(error)
-        self.process.stdin.write("RUN\n")
-        self.process.stdin.flush()
-        self.process.stdin.close()
+            if self.process is not None:
+                if self.process.poll() is None:
+                    self.process.kill()
+                self.process.wait(10)
+                for pipe in (self.process.stdin,self.process.stdout):
+                    if pipe is not None:
+                        try:pipe.close()
+                        except OSError:pass
+            raise
 
     def close(self):
         if self.handle:

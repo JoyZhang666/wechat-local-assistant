@@ -2,7 +2,7 @@
 
 选择聊天和时间范围，把讨论整理为有原文依据的主题摘要，或保存成可离线阅读的聊天记录包。
 
-**v1.13.0-rc.2 · Windows源码预发行版 · MIT**
+**v1.13.0-rc.3 · Windows源码预发行版 · MIT**
 
 本项目独立开发，不是微信或OpenAI官方产品。仅用于本人账号及有权处理的记录。
 
@@ -16,6 +16,7 @@
 - **三种文字模型**：本地Ollama、云端兼容API、ChatGPT／Codex会员授权；默认本地，云端每次确认发送范围。
 - **按需运行**：不注册开机启动、不新增常驻监控；结束时释放本程序启动的模型／请求进程。
 - **轻量源码**：不附模型、虚拟环境、原生解密DLL或真实聊天，依赖按功能安装。
+- **辅助首次接入**：本人逐次授权后，限时协助验证数据库密钥；兼容V2图片另提供离线接入。手动导入保留为高级备用。
 
 ## 使用步骤
 
@@ -24,11 +25,12 @@
 ```powershell
 python -m venv .venv
 .venv\Scripts\python.exe -m pip install -r requirements-gui.txt
-.venv\Scripts\python.exe scripts/wechat_ui.py gui
+.venv\Scripts\python.exe scripts/create_gui_launcher.py --initialize-only --config "$env:LOCALAPPDATA/WechatLocalAssistant/settings.json"
+.venv\Scripts\pythonw-local-only.exe scripts/wechat_ui.py gui
 ```
 
 1. **选择模型与连接方式**：填写私人数据目录；纯云端文字摘要不必安装Ollama。
-2. **微信首次接入**：选择内置后端并保存，再选择本人账号目录，填写本人账号ID和已授权数据库密钥，勾选确认、验证导入。安装不会提取密钥或附加微信。
+2. **微信首次接入**：安装可选`requirements-access.txt`，选择内置后端并保存，再点“协助接入本人微信”。本人选择目录和官方程序，单独授权并正常退出、重开；程序不强关、不常驻。安装或引导不会触发取钥。[操作和兼容范围](docs/first-access.md)。
 3. **模型连接**：本地填写Ollama路径、模型目录及已安装标签；API填写HTTPS服务地址、模型和Key；会员在官方页面亲自授权后选返回的模型。
 4. **先做合成测试**：云端测试仅发送内置虚构消息。连接成功后刷新聊天、勾选对象、选择时间、预览数量。
 5. **开始处理**：A页生成含媒体识别的摘要；B页选择只识别并导出，或识别后生成摘要。
