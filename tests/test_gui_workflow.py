@@ -90,8 +90,8 @@ class NativeSelectionTests(unittest.TestCase):
         self.root=tk.Tk()
         self.root.withdraw()
         self.app=App(self.root,Path(self.temp.name)/"absent-config.json")
-        self.app.chats=[{"id":"room@chatroom","name":"�ظ�����","is_group":True,"last_time":0},
-                        {"id":"single-person","name":"�ظ�����","is_group":False,"last_time":0}]
+        self.app.chats=[{"id":"room@chatroom","name":"重复名字","is_group":True,"last_time":0},
+                        {"id":"single-person","name":"重复名字","is_group":False,"last_time":0}]
         self.app.render_chats()
 
     def tearDown(self):
@@ -106,7 +106,7 @@ class NativeSelectionTests(unittest.TestCase):
         self.assertEqual(set(self.app.tree.get_children()),{"room@chatroom","single-person"})
         labels=[self.app.tree.item(x,"values")[1] for x in self.app.tree.get_children()]
         self.assertEqual(len(set(labels)),2)
-        self.app.kind.set("Ⱥ��")
+        self.app.kind.set("群聊")
         self.app.render_chats()
         self.app.select_visible()
         self.assertEqual(self.app.selected,{"room@chatroom"})
@@ -132,7 +132,7 @@ class NativeSelectionTests(unittest.TestCase):
                                   model_backend="cloud",cloud_base_url="https://api.example.invalid/v1",cloud_model="synthetic-cloud")
         self.app.prepared="c"*32
         atomic_json(Path(self.temp.name)/"jobs"/self.app.prepared/"manifest.json",
-                    {"chats":[{"name":"�ϳ�Ⱥ"}],"total_text":3})
+                    {"chats":[{"name":"合成群"}],"total_text":3})
 
     def test_cloud_decline_does_not_send_or_destroy_preview(self):
         self.cloud_preview()
@@ -147,7 +147,7 @@ class NativeSelectionTests(unittest.TestCase):
             self.app.generate()
             self.app.generate()
         self.assertEqual(ask.call_count,2)
-        self.assertIn("3������",ask.call_args.args[1])
+        self.assertIn("3条文字",ask.call_args.args[1])
         run.assert_called_with("generate","c"*32,allow_cloud=True)
 
     def test_local_generate_does_not_request_cloud_permission(self):
@@ -163,7 +163,7 @@ class NativeSelectionTests(unittest.TestCase):
         self.app.settings=replace(self.app.settings,model_backend="membership",membership_model="synthetic-member-model")
         with patch("wechat_local.gui.messagebox.askyesno",return_value=True) as ask,patch.object(self.app,"run") as run:
             self.app.generate()
-        self.assertIn("���üƻ����",ask.call_args.args[1])
+        self.assertIn("共用计划额度",ask.call_args.args[1])
         self.assertIn("synthetic-member-model",ask.call_args.args[1])
         run.assert_called_once_with("generate","c"*32,allow_cloud=True)
 
@@ -195,7 +195,7 @@ class NativeSelectionTests(unittest.TestCase):
         with patch("wechat_local.gui.messagebox.askyesno",return_value=False) as ask,patch.object(self.app,"run") as run:
             self.app.export_records(summarize=True)
         run.assert_not_called()
-        self.assertIn("ʶ��������תд",ask.call_args.args[1])
+        self.assertIn("识别后的语音转写",ask.call_args.args[1])
         with patch("wechat_local.gui.messagebox.askyesno") as ask,patch.object(self.app,"run") as run:
             self.app.export_records()
         ask.assert_not_called()
@@ -205,10 +205,10 @@ class NativeSelectionTests(unittest.TestCase):
             self.app.export_records(summarize=True)
         self.assertTrue(run.call_args.kwargs["summarize"])
         self.assertTrue(run.call_args.kwargs["allow_cloud"])
-        self.assertEqual(self.app.model_heading["text"],"һ��ģ��")
-        self.assertEqual(self.app.range_heading["text"],"����ʱ�䷶Χ")
-        self.assertEqual(self.app.processing_heading["text"],"�ġ���ʼ����")
-        self.assertEqual(self.app.result_title.get(),"�塢�鿴���")
+        self.assertEqual(self.app.model_heading["text"],"一、模型")
+        self.assertEqual(self.app.range_heading["text"],"三、时间范围")
+        self.assertEqual(self.app.processing_heading["text"],"四、开始处理")
+        self.assertEqual(self.app.result_title.get(),"五、查看结果")
 
     def test_missing_dedicated_interpreter_blocks_private_worker(self):
         with patch.object(self.app,"need_settings",return_value=True),patch.object(Path,"is_file",return_value=False),\
@@ -222,22 +222,22 @@ class NativeSelectionTests(unittest.TestCase):
         self.app.settings=Settings(*(Path(self.temp.name) for _ in range(4)),model="synthetic")
         directory=Path(self.temp.name)/"exports"/("a"*32)
         directory.mkdir(parents=True)
-        atomic_json(directory/"manifest.json",{"chat":{"name":"�ϳ�Ⱥ"},"start":100,"end":200})
-        (directory/"records.md").write_text("�ϳɼ�¼",encoding="utf-8")
-        (directory/"index.html").write_text("<html>�ϳ��Ķ�ҳ</html>",encoding="utf-8")
+        atomic_json(directory/"manifest.json",{"chat":{"name":"合成群"},"start":100,"end":200})
+        (directory/"records.md").write_text("合成记录",encoding="utf-8")
+        (directory/"index.html").write_text("<html>合成阅读页</html>",encoding="utf-8")
         self.app.load_export(directory/"manifest.json")
         return directory
 
     def test_records_save_a_bundle_while_summary_stays_markdown(self):
         self.synthetic_export()
-        self.assertIn('����Ԥ��',self.app.text.get('1.0','end'))
-        self.assertEqual(self.app.export_button["text"],"����������¼��")
+        self.assertIn('文字预览',self.app.text.get('1.0','end'))
+        self.assertEqual(self.app.export_button["text"],"保存完整记录包")
         with patch("wechat_local.gui.filedialog.askdirectory",return_value=self.temp.name),\
                 patch("wechat_local.gui.filedialog.asksaveasfilename") as md,patch.object(self.app,"run") as run:
             self.app.export()
         md.assert_not_called()
         self.assertEqual(run.call_args.args,("save-export","a"*32))
-        self.assertTrue(run.call_args.kwargs["destination"].name.startswith("�����¼_"))
+        self.assertTrue(run.call_args.kwargs["destination"].name.startswith("聊天记录_"))
         self.app.report_scope="reports"
         with patch("wechat_local.gui.filedialog.asksaveasfilename",return_value="") as md:
             self.app.export()
@@ -252,8 +252,8 @@ class NativeSelectionTests(unittest.TestCase):
                 yield child
                 yield from descendants(child)
         books=[w for w in descendants(window) if isinstance(w,ttk.Notebook)]
-        self.assertTrue(any('ͼƬ����' in [b.tab(t,'text') for t in b.tabs()] for b in books))
-        key_button=next(w for w in descendants(window) if isinstance(w,ttk.Button) and w['text']=='����ͼƬ��Կ����������')
+        self.assertTrue(any('图片解码' in [b.tab(t,'text') for t in b.tabs()] for b in books))
+        key_button=next(w for w in descendants(window) if isinstance(w,ttk.Button) and w['text']=='保存图片密钥（仅本机）')
         with patch('wechat_local.image_keys.ImageKeyStore.save') as save,patch('wechat_local.gui.messagebox.showerror') as notice:
             key_button.invoke()
         save.assert_not_called()
@@ -265,7 +265,7 @@ class NativeSelectionTests(unittest.TestCase):
         self.synthetic_export()
         saved=Path(self.temp.name)/"saved"
         saved.mkdir()
-        (saved/"index.html").write_text("<html>�ϳ��Ķ�ҳ</html>",encoding="utf-8")
+        (saved/"index.html").write_text("<html>合成阅读页</html>",encoding="utf-8")
         self.app.saved_export_dir=saved
         with patch("os.startfile") as opened:
             self.app.open_reading()
@@ -295,24 +295,24 @@ class NativeSelectionTests(unittest.TestCase):
         with patch("wechat_local.gui.messagebox.showerror") as alert:
             self.app.poll()
         alert.assert_called_once()
-        self.assertIn("������ԭ�Ĳ�һ��",self.app.status.get())
+        self.assertIn("引文与原文不一致",self.app.status.get())
         self.assertEqual(self.app.progress["value"],0)
-        self.assertIn("�ѽ���",self.app.activity.get())
+        self.assertIn("已结束",self.app.activity.get())
 
     def test_progress_counts_completed_work_and_checkpoint_reuse(self):
         self.app.events.put({"phase":"extract","state":"start","current":2,"total":5,"working":3})
         self.app.poll()
-        self.assertIn("�����2/5",self.app.status.get())
-        self.assertIn("�ȴ�ģ����Ӧ",self.app.status.get())
+        self.assertIn("已完成2/5",self.app.status.get())
+        self.assertIn("等待模型响应",self.app.status.get())
         self.assertEqual(self.app.progress["value"],2)
         self.app.events.put({"phase":"extract","state":"done","current":3,"total":5,"reused":True})
         self.app.poll()
-        self.assertIn("���ü���",self.app.status.get())
+        self.assertIn("复用检查点",self.app.status.get())
 
     def test_cache_only_generation_does_not_claim_new_cloud_send(self):
         self.app.events.put({"phase":"complete","model_backend":"membership","checkpoint_only":True})
         self.app.poll()
-        self.assertIn("û������ģ������",self.app.status.get())
+        self.assertIn("没有新增模型请求",self.app.status.get())
 
     def test_failed_job_explains_saved_progress_and_resume(self):
         self.app.settings=Settings(*(Path(self.temp.name) for _ in range(4)),model="synthetic")
@@ -322,16 +322,16 @@ class NativeSelectionTests(unittest.TestCase):
         self.app.events.put({"phase":"worker_exit","exit_code":1,"command":"generate"})
         with patch("wechat_local.gui.messagebox.showerror"):
             self.app.poll()
-        self.assertIn("֤�ݱ��",self.app.status.get())
+        self.assertIn("证据编号",self.app.status.get())
         self.assertIn("7/12",self.app.status.get())
-        self.assertIn("���㱣��",self.app.status.get())
+        self.assertIn("检查点保留",self.app.status.get())
         self.assertEqual(self.app.progress["value"],0)
 
     def test_task_status_is_visible_at_minimum_window_size(self):
         self.root.geometry("920x620")
         self.root.deiconify()
-        self.app.status.set("����ʧ�ܣ��ϲ���©������ȡ��ʵ������ɱ��׶�7/12�Ρ���ͨ���ֶμ��㱣��������Ԥ����ͬ��Χ�ɼ�����")
-        self.app.activity.set("����������180�룻��ǰ�׶�12�����½��ȡ�")
+        self.app.status.set("任务失败：合并遗漏了已提取事实。已完成本阶段7/12段。已通过分段检查点保留，重新预览相同范围可继续。")
+        self.app.activity.set("本次已运行180秒；当前阶段12秒无新进度。")
         self.root.update()
         for widget in (self.app.progress,self.app.status_label,self.app.activity_label):
             self.assertTrue(widget.winfo_ismapped())
@@ -342,9 +342,9 @@ class NativeSelectionTests(unittest.TestCase):
         self.app.settings=Settings(*(Path(self.temp.name) for _ in range(4)),model="synthetic")
         directory=Path(self.temp.name)/"reports"/("e"*32)
         directory.mkdir(parents=True)
-        (directory/"chat-001.md").write_text("# �ϳ�ժҪ\n\n- ���Դ��졣\n  - ���ݣ�M000001-P0001��ԭ�ģ��������ݡ�\n",encoding="utf-8")
+        (directory/"chat-001.md").write_text("# 合成摘要\n\n- 测试待办。\n  - 依据：M000001-P0001；原文：测试内容。\n",encoding="utf-8")
         path=directory/"result.json"
-        atomic_json(path,{"status":"complete","complete":True,"chats":[{"name":"�ϳ�","file":str(directory/"chat-001.md")} ]})
+        atomic_json(path,{"status":"complete","complete":True,"chats":[{"name":"合成","file":str(directory/"chat-001.md")} ]})
         self.app.load_results(path)
         return path
 
@@ -353,7 +353,7 @@ class NativeSelectionTests(unittest.TestCase):
         for button in (self.app.open_summary_button,self.app.summary_directory_button,self.app.save_summary_button):
             self.assertEqual(str(button["state"]),"normal")
         self.assertEqual(str(self.app.open_reading_button["state"]),"disabled")
-        self.assertIn("  > ����",self.app.text.get("1.0","end"))
+        self.assertIn("  > 依据",self.app.text.get("1.0","end"))
         self.assertTrue(self.app.text.tag_ranges("evidence"))
         self.assertIn(str(path.parent.resolve()),self.app.saved_location.get())
 
@@ -367,31 +367,31 @@ class NativeSelectionTests(unittest.TestCase):
             self.app.poll()
         self.assertEqual(self.app.result_chat.get(),"")
         self.assertEqual(self.app.reports,[])
-        self.assertIn("600��",self.app.status.get())
+        self.assertIn("600字",self.app.status.get())
         self.assertIn("32/59",self.app.status.get())
         self.assertEqual(str(self.app.open_summary_button["state"]),"disabled")
 
     def test_format_retry_progress_does_not_claim_checkpoint_saved(self):
         self.app.events.put({"phase":"extract","state":"retry","current":32,"total":59,"working":33})
         self.app.poll()
-        self.assertIn("��33��",self.app.status.get())
-        self.assertIn("���һ�β��",self.app.status.get())
-        self.assertNotIn("�����ѱ���",self.app.status.get())
+        self.assertIn("第33段",self.app.status.get())
+        self.assertIn("最多一次拆分",self.app.status.get())
+        self.assertNotIn("检查点已保存",self.app.status.get())
 
     def test_cloud_retry_progress_and_exhausted_failure_are_visible(self):
-        self.app.events.put({"phase":"cloud-retry","message":"��Ա������ʱʧ�ܣ�2������ԣ���3/3�Σ�������ɷֶα��ֲ��䡣"})
+        self.app.events.put({"phase":"cloud-retry","message":"会员连接暂时失败，2秒后重试（第3/3次）；已完成分段保持不变。"})
         self.app.poll()
-        self.assertIn("��3/3��",self.app.status.get())
+        self.assertIn("第3/3次",self.app.status.get())
         self.app.settings=Settings(*(Path(self.temp.name) for _ in range(4)),model="synthetic")
         path=Path(self.temp.name)/"reports"/"retry-failed"/"result.json"
         atomic_json(path,{"chats":[],"connection_retries":[{},{}],"progress":{"current":42,"total":58},
                           "transport_diagnostic":{"phase":"tls_handshake"}})
-        self.app.events.put({"phase":"failed","error_code":"membership_connect_reset", "message":"��Ա�ӿ����ӱ����û�رա�","result_path":str(path)})
+        self.app.events.put({"phase":"failed","error_code":"membership_connect_reset", "message":"会员接口连接被重置或关闭。","result_path":str(path)})
         with patch("wechat_local.gui.messagebox.showerror"):
             self.app.poll()
-        self.assertIn("���Զ�����2��",self.app.status.get())
+        self.assertIn("已自动重试2次",self.app.status.get())
         self.assertIn("42/58",self.app.status.get())
-        self.assertIn("���Ͻ׶Σ�TLS����",self.app.status.get())
+        self.assertIn("故障阶段：TLS握手",self.app.status.get())
 
     def test_open_summary_uses_offline_worker(self):
         self.synthetic_summary()
@@ -496,12 +496,12 @@ class NativeSelectionTests(unittest.TestCase):
         self.root.deiconify()
         probe=tk.Toplevel(self.root)
         probe.geometry("400x160")
-        combo=ttk.Combobox(probe,state="readonly",values=("�ϳ�ѡ��",))
+        combo=ttk.Combobox(probe,state="readonly",values=("合成选项",))
         combo.pack()
-        nearby=ttk.Button(probe,text="��ʷժҪ",style="Quiet.TButton")
+        nearby=ttk.Button(probe,text="历史摘要",style="Quiet.TButton")
         nearby.pack()
         selected=tk.StringVar(value="other")
-        radio=ttk.Radiobutton(probe,text="�����һ���п�ѡ��",variable=selected,value="chosen")
+        radio=ttk.Radiobutton(probe,text="点击这一整行可选择",variable=selected,value="chosen")
         radio.pack(fill="x")
         self.root.update()
         self.assertLessEqual(abs(combo.winfo_height()-nearby.winfo_height()),self.app.pixels(4))
@@ -520,8 +520,8 @@ class NativeSelectionTests(unittest.TestCase):
     def test_48_and_72_hour_presets_use_rolling_beijing_time_and_invalidate_preview(self):
         fixed=datetime(2026,10,15,0,31,48,tzinfo=timezone(timedelta(hours=8)))
         labels=[str(button["text"]) for button in self.app.range_controls[2:]]
-        self.assertIn("��ȥ48Сʱ",labels)
-        self.assertIn("��ȥ72Сʱ",labels)
+        self.assertIn("过去48小时",labels)
+        self.assertIn("过去72小时",labels)
         for hours in (48,72):
             self.app.prepared="synthetic-old-preview"
             self.app.generate_button.configure(state="normal")
@@ -592,16 +592,16 @@ class NativeSelectionTests(unittest.TestCase):
             self.assertGreater(after.winfo_rooty(),before.winfo_rooty()+before.winfo_height())
         style=ttk.Style(self.root)
         self.assertGreaterEqual(int(style.lookup("Panel.TFrame","borderwidth")),1)
-        self.assertIn("���ӷ�ʽ",self.app.config_button["text"])
+        self.assertIn("连接方式",self.app.config_button["text"])
         self.assertIn("ChatGPT",self.app.member_login_button["text"])
-        self.assertIn("ʾ��",self.app.cloud_test_button["text"])
+        self.assertIn("示例",self.app.cloud_test_button["text"])
 
     def test_fixed_footer_keeps_progress_and_dynamic_text_visible(self):
         self.root.geometry("920x660")
         self.root.deiconify()
         self.root.update()
         self.assertTrue(self.app.activity_label.winfo_ismapped())
-        self.assertIn("û������",self.app.activity.get())
+        self.assertIn("没有运行",self.app.activity.get())
         self.assertGreaterEqual(self.app.progress.winfo_height(),self.app.pixels(12))
         self.assertGreater(self.app.status_label.winfo_rooty(),self.app.progress.winfo_rooty()+self.app.progress.winfo_height())
         self.assertGreater(self.app.activity_label.winfo_rooty(),self.app.status_label.winfo_rooty())
@@ -609,7 +609,7 @@ class NativeSelectionTests(unittest.TestCase):
         self.app.events.put({"phase":"extract","state":"start","current":7,"total":12,"working":8})
         self.app.poll()
         self.root.update()
-        self.assertIn("�����7/12",self.app.status.get())
+        self.assertIn("已完成7/12",self.app.status.get())
         self.assertEqual(self.app.progress["value"],7)
         self.assertTrue(self.app.status_label.winfo_ismapped())
 
@@ -637,7 +637,7 @@ class NativeSelectionTests(unittest.TestCase):
         self.root.update()
         self.assertFalse(self.app.record_button.winfo_ismapped())
         self.assertTrue(self.app.text.tag_ranges("title"))
-        self.assertNotIn("# �ϳ�ժҪ",self.app.text.get("1.0","end"))
+        self.assertNotIn("# 合成摘要",self.app.text.get("1.0","end"))
         self.app.task_tabs.select(self.app.export_task)
         self.root.update()
         self.assertTrue(self.app.record_button.winfo_ismapped())
@@ -654,8 +654,8 @@ class NativeSelectionTests(unittest.TestCase):
                     window.tk.call("tk","scaling",scale)
                     app=App(window,Path(self.temp.name)/"absent-config.json")
                     combo=ttk.Combobox(window)
-                    nearby=ttk.Button(window,text="��ʷժҪ",style="Quiet.TButton")
-                    radio=ttk.Radiobutton(window,text="�ϳ�ģʽ")
+                    nearby=ttk.Button(window,text="历史摘要",style="Quiet.TButton")
+                    radio=ttk.Radiobutton(window,text="合成模式")
                     window.update_idletasks()
                     self.assertLessEqual(abs(combo.winfo_reqheight()-nearby.winfo_reqheight()),app.pixels(4))
                     self.assertGreaterEqual(radio.winfo_reqheight(),app.pixels(40))
@@ -678,7 +678,7 @@ class NativeSelectionTests(unittest.TestCase):
         self.app.events.put({"phase":"summary-ready","result_path":str(path)})
         with patch("os.startfile",side_effect=OSError("synthetic")),patch("wechat_local.gui.messagebox.showerror"):
             self.app.poll()
-        self.assertIn("�Ķ�ҳδ�ܴ�",self.app.status.get())
+        self.assertIn("阅读页未能打开",self.app.status.get())
 
 
 if __name__=="__main__":
