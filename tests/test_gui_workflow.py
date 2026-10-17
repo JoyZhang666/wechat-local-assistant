@@ -594,7 +594,7 @@ class NativeSelectionTests(unittest.TestCase):
         self.assertGreaterEqual(int(style.lookup("Panel.TFrame","borderwidth")),1)
         self.assertIn("连接方式",self.app.config_button["text"])
         self.assertIn("ChatGPT",self.app.member_login_button["text"])
-        self.assertIn("示例",self.app.cloud_test_button["text"])
+        self.assertEqual(self.app.cloud_test_button["text"],"检查云端连接")
 
     def test_fixed_footer_keeps_progress_and_dynamic_text_visible(self):
         self.root.geometry("920x660")

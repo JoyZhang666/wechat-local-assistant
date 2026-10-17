@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import os
 from pathlib import Path
 import re
@@ -200,6 +201,24 @@ class LocalASR:
                 or self.runtime_version != "b11516"
                 or not isinstance(self.model_revision, str) or not re.fullmatch(r"[a-f0-9]{40}", self.model_revision)):
             raise ASRError("asr_invalid_configuration")
+        self.integrity_verified=False
+        if "sha256" in config:
+            expected=config["sha256"]
+            names={"executable","model","mmproj"}|({"vad_model"} if self.vad_model is not None else set())
+            if not isinstance(expected,dict) or set(expected)!=names:
+                raise ASRError("asr_invalid_checksum_configuration")
+            for name in sorted(names):
+                if not isinstance(expected[name],str) or not re.fullmatch(r"[a-f0-9]{64}",expected[name]):
+                    raise ASRError("asr_invalid_checksum_configuration")
+                digest=hashlib.sha256()
+                try:
+                    with getattr(self,name).open("rb") as source:
+                        for chunk in iter(lambda:source.read(4*1024*1024),b""):
+                            self._check_cancelled()
+                            digest.update(chunk)
+                except OSError:raise ASRError("asr_local_file_missing") from None
+                if digest.hexdigest()!=expected[name]:raise ASRError("asr_checksum_mismatch")
+            self.integrity_verified=True
 
     def command(self, wav_path):
         command = [str(self.executable), "-m", str(self.model), "--mmproj", str(self.mmproj),

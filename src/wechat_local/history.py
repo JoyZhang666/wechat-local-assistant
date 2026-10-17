@@ -13,6 +13,7 @@ import tempfile
 
 READ_MUTEX = r"Local\WechatAiAssistantReadOnly"
 TEXT_TYPES = frozenset({1, 2147483653, 1099511627781})
+MAX_MESSAGE_BYTES = 8*1024*1024
 REQUIRED_COLUMNS = {
     "local_type", "create_time", "real_sender_id", "message_content",
     "WCDB_CT_message_content", "local_id", "server_id",
@@ -52,6 +53,8 @@ def _open(path: Path):
 
 
 def _decode_text(content, compression: int, sender_id: str) -> str:
+    if isinstance(content,(bytes,str)) and len(content)>MAX_MESSAGE_BYTES:
+        raise HistoryError("单条消息超过处理限额；原数据库保持，未截断返回。")
     if compression not in (0, 1, 2, 3, 4):
         raise HistoryError("遇到未知文本编码；停止本次摘要准备。")
     if compression == 4:
@@ -61,9 +64,11 @@ def _decode_text(content, compression: int, sender_id: str) -> str:
             import zstandard
             # Streaming decompression handles frames without an advertised length.
             with zstandard.ZstdDecompressor().stream_reader(content) as stream:
-                content = stream.read()
+                content = stream.read(MAX_MESSAGE_BYTES+1)
         except Exception:
             raise HistoryError("压缩文本无法解码；停止本次摘要准备。") from None
+        if len(content)>MAX_MESSAGE_BYTES:
+            raise HistoryError("单条压缩消息解码超限；原数据库保持，未截断返回。")
     if isinstance(content, bytes):
         try:
             if content.startswith((b"\xff\xfe", b"\xfe\xff")):

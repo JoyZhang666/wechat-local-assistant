@@ -41,6 +41,21 @@ class ASRTests(unittest.TestCase):
     def save_config(self):
         (self.root / "runtime.json").write_text(json.dumps(self.config), encoding="utf-8")
 
+    def test_configured_hashes_are_checked_before_process_launch(self):
+        import hashlib
+        self.config['sha256']={key:hashlib.sha256((self.root/self.config[key]).read_bytes()).hexdigest()
+                               for key in ('executable','model','mmproj')}
+        self.save_config()
+        self.assertTrue(asr.LocalASR(self.root).integrity_verified)
+        (self.root/self.config['model']).write_bytes(b'changed synthetic fixture')
+        with patch('wechat_local.asr.subprocess.Popen') as launch:
+            with self.assertRaises(asr.ASRError) as error:asr.LocalASR(self.root)
+        self.assertEqual(error.exception.code,'asr_checksum_mismatch');launch.assert_not_called()
+        del self.config['sha256']['model']
+        self.save_config()
+        with self.assertRaises(asr.ASRError) as error:asr.LocalASR(self.root)
+        self.assertEqual(error.exception.code,'asr_invalid_checksum_configuration')
+
     def write_wav(self, seconds=0.5, channels=1, width=2, rate=24000):
         path = self.root / "synthetic.wav"
         with wave.open(str(path), "wb") as audio:

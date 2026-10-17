@@ -51,19 +51,19 @@ def execute(args,settings,progress):
                 "revoked":result.get("revoked"),"action":args.command}
     if args.command=="cloud-test":
         if settings.model_backend not in ("cloud","membership") or not getattr(args,"allow_cloud",False):
-            raise ValueError("请先配置云端模型，并确认仅发送合成测试数据。")
+            raise ValueError("请先配置云端模型，并确认仅发送内置虚构材料。")
         if job.exists():
-            raise ValueError("测试需要新的任务编号，不覆盖现有资料。")
+            raise ValueError("连接检查需要新的任务编号，不覆盖现有资料。")
         start=int(datetime.fromisoformat("2026-10-10T09:00:00+08:00").timestamp())
-        texts=("合成测试：由测试甲整理测试资料，截止时间为2026年10月12日15:00。",
-               "合成测试：明确采用方案A，不采用方案B。",
-               "合成测试：本次预算上限300元，预算尚未花费。")
-        rows=[{"id":str(i),"chat_id":"synthetic-cloud-test","sender":"合成测试人员",
+        texts=("内置虚构材料：由成员甲整理材料，截止时间为2026年10月12日15:00。",
+               "内置虚构材料：明确采用方案A，不采用方案B。",
+               "内置虚构材料：本次预算上限300元，预算尚未花费。")
+        rows=[{"id":str(i),"chat_id":"synthetic-cloud-test","sender":"虚构成员",
                "is_self":False,"timestamp":start+i,"type":1,"text":text} for i,text in enumerate(texts,1)]
         snapshot=job/"snapshot"/"messages.jsonl"
         snapshot.parent.mkdir(parents=True)
         snapshot.write_text("".join(json.dumps(row,ensure_ascii=False)+"\n" for row in rows),encoding="utf-8")
-        atomic_json(job/"manifest.json",{"chats":[{"id":"synthetic-cloud-test","name":"云端合成测试（无真实微信内容）",
+        atomic_json(job/"manifest.json",{"chats":[{"id":"synthetic-cloud-test","name":"云端连接检查（内置虚构材料）",
                     "text_count":3,"skipped_count":0}],"total_text":3,"total_skipped":0,
                     "start":start,"end":start+3600,"messages_file":str(snapshot)})
         from types import SimpleNamespace

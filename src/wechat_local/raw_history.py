@@ -56,6 +56,8 @@ def _clean_structure(value):
 
 def _xml_payload(value):
     hints = []
+    if re.search(r"<!\s*(?:DOCTYPE|ENTITY)\b",value,re.I):
+        raise HistoryError("消息包含不支持的XML文档类型或实体定义，未展开；原数据库保持。")
     try:
         document = ET.fromstring(value)
     except ET.ParseError:

@@ -153,12 +153,14 @@ class App:
         self.model_status_label.bind("<Configure>",lambda e:self.model_status_label.configure(wraplength=max(120,e.width)))
         self.config_button=ttk.Button(connection,text="选择模型与连接方式",command=self.configure)
         self.config_button.pack(fill="x")
+        self.runtime_button=ttk.Button(connection,text="初始化本项目运行程序",style="Quiet.TButton",command=self.initialize_runtime)
+        self.runtime_button.pack(fill="x",pady=px((6,0)))
         model_actions=ttk.Frame(connection,style="Card.TFrame")
         model_actions.pack(fill="x",pady=px((6,0)))
         model_actions.columnconfigure(0,weight=1)
         self.member_login_button=ttk.Button(model_actions,text="登录ChatGPT会员",style="Quiet.TButton",command=self.member_login)
         self.member_login_button.grid(row=0,column=0,sticky="ew")
-        self.cloud_test_button=ttk.Button(model_actions,text="测试云端摘要（示例）",style="Quiet.TButton",command=self.cloud_test,state="disabled")
+        self.cloud_test_button=ttk.Button(model_actions,text="检查云端连接",style="Quiet.TButton",command=self.cloud_test,state="disabled")
         self.cloud_test_button.grid(row=1,column=0,sticky="ew",pady=px((6,0)))
 
         self.task_status=task_status=ttk.Frame(self.root,style="Panel.TFrame",padding=px((8,6)))
@@ -191,7 +193,7 @@ class App:
         ttk.Label(row,text="搜索",style="Muted.TLabel").pack(side="left",padx=px((0,6)))
         ttk.Entry(row,textvariable=self.search,width=16).pack(side="left",fill="x",expand=True)
         self.search.trace_add("write",lambda *_:self.render_chats())
-        self.refresh_button=ttk.Button(row,text="刷新",style="Quiet.TButton",command=self.refresh)
+        self.refresh_button=ttk.Button(row,text="连接／刷新",style="Quiet.TButton",command=self.refresh)
         self.refresh_button.pack(side="right",padx=px((6,0)))
         filters=ttk.Frame(chats,style="Card.TFrame")
         filters.pack(fill="x",pady=px(8))
@@ -349,6 +351,16 @@ class App:
             self.saved_location_entry.pack_forget()
         self.layout_result_actions()
 
+    def initialize_runtime(self):
+        if self.active:
+            return
+        try:
+            from .local_runtime import initialize
+            initialize()
+            self.status.set("项目运行程序已初始化。未修改防火墙；默认调用本机不等于已强制阻断外网。")
+        except (OSError,ValueError) as error:
+            messagebox.showerror("初始化未完成",str(error),parent=self.root)
+
     def show_onboarding(self,automatic=False):
         from .onboarding import Onboarding,load_state
         path=self.config_path.with_suffix(".onboarding.json")
@@ -376,7 +388,7 @@ class App:
         content.pack(fill="both",expand=True)
         ttk.Label(content,text="从选择到阅读，按顺序完成",style="Heading.TLabel").pack(anchor="w",pady=self.pixels((0,12)))
         self.guide_paragraphs=(
-            "一、模型（左侧）：选择模型与连接方式用于选择本地模型、云端API或会员模型并配置连接；登录ChatGPT会员用于授权本助手使用会员额度；测试云端摘要（示例）仅发送虚构材料，验证连接和摘要能力，本地模式下不启用。",
+            "一、模型（左侧）：选择模型与连接方式用于选择本地模型、云端API或会员模型并配置连接；登录ChatGPT会员用于授权本助手使用会员额度；检查云端连接仅发送内置虚构材料，验证连接和摘要能力，本地模式下不启用。",
             "二、聊天（左侧）：点击刷新读取列表，搜索后勾选需要处理的群聊或联系人。程序不会默认选择全部聊天。",
             "三、时间范围（右侧）：填写北京时间的开始／结束时间，结束时刻不包含在范围内；也可点击快捷日期。",
             "四、开始处理（右侧）：生成摘要页先点击1预览数量，再点击2识别媒体并生成摘要。完整导出只能选择一个聊天：1只识别并导出记录，2识别后生成摘要（同时保留记录包）。",
@@ -543,7 +555,7 @@ class App:
             return
         python=Path(sys.executable).with_name("python-local-only.exe")
         if not python.is_file():
-            messagebox.showinfo("本机安装未完成","请先创建专属启动器并验证外网阻断，再处理私有聊天。",parent=self.root)
+            messagebox.showinfo("本机安装未完成","请先点击“一、模型 → 初始化本项目运行程序”，再重试。此操作不修改Windows防火墙。",parent=self.root)
             return
         self.job_id=job_id
         self.active_command=command
@@ -594,8 +606,27 @@ class App:
 
     def refresh(self):
         if self.need_settings() and not self.active:
+            if self.settings.provider_backend=="builtin":
+                from .builtin_provider import BuiltinProvider
+                from .history import HistoryError
+                try:BuiltinProvider(self.settings.data_dir,self.settings.data_dir/"cache")._access()
+                except (HistoryError,OSError,ValueError,KeyError):
+                    self.connect_wechat()
+                    return
             self.invalidate()
             self.run("list",private_output=self.settings.data_dir/"chat-list.json")
+
+    def connect_wechat(self,parent=None):
+        if not self.need_settings() or self.active:return
+        if self.settings.provider_backend!="builtin":
+            self.refresh()
+            return
+        from .access_ui import AccessDialog
+        existing=getattr(self,"access_dialog",None)
+        if existing and existing.window.winfo_exists():
+            existing.window.lift()
+            return
+        self.access_dialog=AccessDialog(self,parent or self.root)
 
     def prepare(self):
         if not self.need_settings() or not self.selected or self.active:
@@ -634,10 +665,10 @@ class App:
     def cloud_test(self):
         if self.active or not self.need_settings() or self.settings.model_backend=="local":
             return
-        notice="仅发送3条内置虚构文字及其摘要合并材料，不读取微信。\n服务：%s\n模型：%s\n会产生少量API费用。是否开始合成连接与摘要测试？"%(
+        notice="仅发送3条内置虚构文字及其摘要合并材料，不读取微信。\n服务：%s\n模型：%s\nAPI模式可能产生少量费用；会员模式使用现有额度。是否检查连接与摘要能力？"%(
             "OpenAI会员（共用计划额度）" if self.settings.model_backend=="membership" else self.settings.cloud_base_url,
             self.settings.membership_model if self.settings.model_backend=="membership" else self.settings.cloud_model)
-        if messagebox.askyesno("合成数据云端测试",notice,parent=self.root):
+        if messagebox.askyesno("检查云端连接",notice,parent=self.root):
             self.invalidate()
             self.run("cloud-test",uuid.uuid4().hex,allow_cloud=True)
 
@@ -721,7 +752,7 @@ class App:
             self.last_progress_at=time.monotonic()
             phase=event.get("phase")
             if phase=="member-ready":
-                self.status.set("会员账户和模型已更新。打开模型设置选择会员账户及模型，再点合成测试。" if event.get("action")!="member-logout"
+                self.status.set("会员账户和模型已更新。打开模型设置选择会员账户及模型，再点“检查云端连接”。" if event.get("action")!="member-logout"
                                 else "已退出此会员账户。" if event.get("revoked") else "已清除本机会员令牌；远端撤销未确认，请在ChatGPT设置中断开。")
             elif phase=="listed":
                 self.chats=read_json(self.settings.data_dir/"chat-list.json")["chats"]
@@ -743,7 +774,7 @@ class App:
                 if self.active_command not in ("render-summary","save-summary","save-export"):
                     self.prepared=None
                 if phase=="complete":
-                    self.status.set("合成测试摘要生成完成。请核对测试甲、10月12日15:00、方案A和300元预算；没有读取微信。" if event.get("synthetic_test")
+                    self.status.set("云端连接检查完成，摘要已生成。请核对成员甲、10月12日15:00、方案A和300元预算；仅使用内置虚构材料，没有读取微信。" if event.get("synthetic_test")
                                     else "生成完成，复用了本机检查点，本次没有新增模型请求；快照已清理。" if event.get("checkpoint_only")
                                     else "生成完成，采用所选云端模型；摘要保存在本机，输入快照已清理。" if event.get("model_backend") in ("cloud","membership")
                                     else "生成完成，完整输入快照已清理，模型已释放。摘要与短引用保存在本机。")
@@ -983,6 +1014,12 @@ class App:
             self.active.cancel()
 
     def close(self):
+        accesses=[getattr(self,name,None) for name in ("access_dialog","image_access_dialog")]
+        busy=[access for access in accesses if access and access.busy]
+        if busy:
+            for access in busy:access.stop.set()
+            self.root.after(150,self.close)
+            return
         if self.active:
             self.closing=True
             self.cancel()
@@ -1012,16 +1049,24 @@ class App:
         reader_tab=ttk.Frame(tabs,padding=12)
         tabs.add(reader_tab,text="微信首次接入")
         reader_backend=tk.StringVar(value=values.get("provider_backend","external" if values.get("provider_dir") else "builtin"))
+        advanced=ttk.LabelFrame(reader_tab,text="高级手动接入（通常不用）",padding=8)
         for value,label in (("builtin","内置MIT读取后端（新安装推荐）"),("external","兼容已有外置读取组件")):
-            ttk.Radiobutton(reader_tab,text=label,variable=reader_backend,value=value).pack(anchor="w",fill="x",pady=4)
-        ttk.Label(reader_tab,text="先保存本机配置，再导入本人账号的数据库密钥。安装不会提取密钥或附加微信；需要提取时须另行了解风险并授权。数据库密钥与图片密钥不同。",wraplength=600).pack(anchor="w",pady=8)
+            ttk.Radiobutton(advanced,text=label,variable=reader_backend,value=value).pack(anchor="w",fill="x",pady=4)
+        ttk.Label(reader_tab,text="和往常一样打开Windows微信并登录，再点击“连接微信”。程序自动识别账号和记录位置，已保存授权自动复用，不需要选择目录或填写账号ID。首次连接仅确认一次本机授权。",wraplength=600).pack(anchor="w",pady=8)
         reader_root=tk.StringVar()
         reader_account=tk.StringVar()
         reader_key=tk.StringVar()
         reader_consent=tk.BooleanVar(value=False)
+        def assist_access():
+            self.connect_wechat(window)
+        ttk.Button(reader_tab,text="连接微信（自动识别）",style="Primary.TButton",command=assist_access).pack(fill="x",pady=8)
+        def toggle_reader_advanced():
+            if advanced.winfo_manager():advanced.pack_forget()
+            else:advanced.pack(fill="x",pady=8)
+        ttk.Button(reader_tab,text="高级排错／手动导入",style="Quiet.TButton",command=toggle_reader_advanced).pack(anchor="w",pady=4)
         for title,var,hidden in (("本人账号目录（含db_storage）",reader_root,False),("本人账号ID（不是昵称）",reader_account,False),("已授权数据库密钥（64位十六进制）",reader_key,True)):
-            ttk.Label(reader_tab,text=title).pack(anchor="w")
-            row=ttk.Frame(reader_tab)
+            ttk.Label(advanced,text=title).pack(anchor="w")
+            row=ttk.Frame(advanced)
             row.pack(fill="x",pady=(3,7))
             ttk.Entry(row,textvariable=var,show="*" if hidden else "",width=55).pack(side="left",fill="x",expand=True)
             if var is reader_root:
@@ -1029,7 +1074,7 @@ class App:
                     path=filedialog.askdirectory(parent=window,title="选择本人账号目录（下含db_storage）")
                     if path:reader_root.set(path)
                 ttk.Button(row,text="选择目录",command=choose_account).pack(side="left",padx=4)
-        ttk.Checkbutton(reader_tab,text="我确认这是本人账号，并同意仅在本机导入和读取",variable=reader_consent).pack(anchor="w",pady=5)
+        ttk.Checkbutton(advanced,text="我确认这是本人账号，并同意仅在本机导入和读取",variable=reader_consent).pack(anchor="w",pady=5)
         def import_database_key():
             try:
                 from .builtin_provider import BuiltinProvider
@@ -1045,7 +1090,7 @@ class App:
             except Exception:
                 reader_key.set("")
                 messagebox.showerror("接入未保存","请检查已保存配置、本人账号目录与ID、密钥和确认选项。未覆盖原接入记录。",parent=window)
-        ttk.Button(reader_tab,text="验证并导入数据库密钥（仅本机）",command=import_database_key).pack(anchor="w",pady=8)
+        ttk.Button(advanced,text="验证并导入数据库密钥（仅本机）",command=import_database_key).pack(anchor="w",pady=8)
         local_tab=ttk.Frame(tabs,padding=8)
         cloud_tab=ttk.Frame(tabs,padding=8)
         tabs.add(local_tab,text="本机与媒体")
@@ -1078,7 +1123,7 @@ class App:
             index=next((i for i,a in enumerate(accounts) if a["id"]==account_id.get()),0)
             account_combo.current(index)
             selected_account()
-        ttk.Label(member_tab,text="1. 点击会员登录，在官方网页亲自确认授权。\n2. 登录完成后重新打开本设置页，选择账户和服务器返回的模型。\n3. 选择会员模式并保存，再点击合成测试。\n与Codex/ChatGPT Work共用额度；不自动转API收费。图片/语音仍本地。",wraplength=600).pack(pady=10)
+        ttk.Label(member_tab,text="1. 点击会员登录，在官方网页亲自确认授权。\n2. 登录完成后重新打开本设置页，选择账户和服务器返回的模型。\n3. 选择会员模式并保存，再点击“检查云端连接”。\n与Codex/ChatGPT Work共用额度；不自动转API收费。图片/语音仍本地。",wraplength=600).pack(pady=10)
         member_actions=ttk.Frame(member_tab)
         member_actions.pack(fill="x")
         def member_action(action,account):
@@ -1099,7 +1144,15 @@ class App:
             ttk.Entry(row,textvariable=var,width=55).pack(side="left",fill="x",expand=True)
         image_tab=ttk.Frame(tabs,padding=12)
         tabs.add(image_tab,text="图片解码")
-        ttk.Label(image_tab,text="新版微信的V2图片使用独立图片密钥，与数据库密钥、会员授权不同。\n只在本机填写；程序不自动附加微信、不上传密钥。没有密钥时仍保留加密原件并标注缺失。",wraplength=600).pack(anchor="w",pady=(0,12))
+        ttk.Label(image_tab,text="新版微信V2图片使用独立密钥。推荐先尝试离线接入：由你选本人账号目录和2—9张不同加密JPEG图片，单独授权后本机验证。不会附加微信、不上传；不支持时停止。手动填写仅作高级备用。",wraplength=600).pack(anchor="w",pady=(0,12))
+        def assist_images():
+            from .image_access_ui import ImageAccessDialog
+            existing=getattr(self,"image_access_dialog",None)
+            if existing and existing.window.winfo_exists():
+                existing.window.lift()
+                return
+            self.image_access_dialog=ImageAccessDialog(self,window)
+        ttk.Button(image_tab,text="协助接入图片（离线验证）",style="Primary.TButton",command=assist_images).pack(fill="x",pady=(0,12))
         image_aes=tk.StringVar()
         image_xor=tk.StringVar()
         for title,var,hidden in (("AES密钥（16字符／32位十六进制）",image_aes,True),("XOR值（0—255；未知可留空）",image_xor,False)):
@@ -1119,7 +1172,7 @@ class App:
         ttk.Button(image_tab,text="保存图片密钥（仅本机）",command=save_image_key).pack(anchor="w",pady=(0,12))
         ttk.Label(image_tab,textvariable=image_status,wraplength=600).pack(anchor="w")
         ttk.Label(local_tab,text="组件和模型须已部署；图片/语音识别始终使用这些本地设置。此处不取钥、不自动下载。",wraplength=600).pack(pady=10)
-        ttk.Label(cloud_tab,text="1. 在服务商官网开通API，获取Key和模型名（不是聊天App登录）。\n2. 填Base URL，例如 https://api.example.com/v1，不含/chat/completions。\n3. 填模型与Key并保存；生成摘要时再次确认发送范围。\n接口需支持Chat Completions与JSON模式。切换后不自动上传、不自动测试。",wraplength=600).pack(anchor="w",pady=(0,10))
+        ttk.Label(cloud_tab,text="1. 在服务商官网开通API，获取Key和模型名（不是聊天App登录）。\n2. 填Base URL，如 https://api.example.com/v1，不含/chat/completions。\n3. 填模型与Key并保存；生成摘要时再次确认发送范围。\n接口需支持Chat Completions与JSON模式。切换后不自动上传、不自动检查连接。",wraplength=600).pack(anchor="w",pady=(0,10))
         cloud_fields={}
         for key,title,initial in (("cloud_base_url","Base URL",values.get("cloud_base_url","")),
                                   ("cloud_model","云端模型名",values.get("cloud_model","")),

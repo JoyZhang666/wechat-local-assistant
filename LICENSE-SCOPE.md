@@ -20,5 +20,7 @@ or of cross-machine compatibility.
 Direct optional dependencies are not bundled or relicensed: psutil and
 zstandard (BSD-3-Clause), Pillow (MIT-CMU), PyCryptodome (BSD/public domain),
 PyJWT (MIT), cryptography (Apache-2.0 OR BSD-3-Clause), silk-python (BSD),
-NumPy (its distributed multi-component license), sherpa-onnx/core (Apache-2.0).
+NumPy (its distributed multi-component license), sherpa-onnx/core (Apache-2.0),
+Frida Python/core (wxWindows Library Licence 3.1, including distributed
+third-party notices; see third_party/wechat-decrypt/NOTICE.md).
 Refer to each installed distribution's license for complete terms and notices.

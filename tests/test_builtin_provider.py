@@ -76,7 +76,7 @@ class BuiltinTests(unittest.TestCase):
         self.folder = tempfile.TemporaryDirectory()
         self.addCleanup(self.folder.cleanup)
         self.root = Path(self.folder.name).resolve()
-        self.account = self.root / "account"
+        self.account = self.root / "self_synthetic_ab12"
         self.storage = self.account / "db_storage"
         self.contact = self.storage / "contact/contact.db"
         self.expected = encrypted_database(self.contact, ["CREATE TABLE contact(username TEXT,remark TEXT,nick_name TEXT)",
@@ -133,9 +133,11 @@ class BuiltinTests(unittest.TestCase):
     def test_account_isolation_and_path_escape(self):
         self.authorize()
         first = self.provider.snapshot().message_paths[0]
-        self.provider.import_key(self.account, "other_synthetic", KEY.hex(), consent=True)
-        second = self.provider.snapshot().message_paths[0]
-        self.assertNotEqual(first.parent.parent, second.parent.parent)
+        before=self.provider.authorization.read_bytes()
+        with self.assertRaises(ValueError):
+            self.provider.import_key(self.account, "other_synthetic", KEY.hex(), consent=True)
+        self.assertEqual(before,self.provider.authorization.read_bytes())
+        self.assertEqual(first,self.provider.snapshot().message_paths[0])
         root, _, key, identity = self.provider._access()
         with self.assertRaises(ValueError):
             self.provider._decrypt(root, key, identity, Path("../../outside.db"))

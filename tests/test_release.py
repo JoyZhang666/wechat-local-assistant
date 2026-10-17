@@ -57,8 +57,13 @@ class ReleaseTests(unittest.TestCase):
                 nodes=list(walk(root))
                 self.assertTrue(any(isinstance(w,ttk.Button) and w.cget("text")=="验证并导入数据库密钥（仅本机）" for w in nodes))
                 self.assertTrue(any(isinstance(w,ttk.Checkbutton) and "本人账号" in w.cget("text") for w in nodes))
+                advanced=next(w for w in nodes if isinstance(w,ttk.LabelFrame) and w.cget("text")=="高级手动接入（通常不用）")
+                self.assertEqual(advanced.winfo_manager(),"")
+                self.assertTrue(any(isinstance(w,ttk.Button) and w.cget("text")=="连接微信（自动识别）" for w in nodes))
                 self.assertFalse((Path(temp)/"reader/authorization.json").exists())
             finally:
+                for callback in root.tk.call("after","info"):root.after_cancel(callback)
+                root.update_idletasks()
                 root.destroy()
 
 
