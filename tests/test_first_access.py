@@ -110,8 +110,8 @@ class AccessTests(unittest.TestCase):
         root=tk.Tk();root.withdraw()
         self.addCleanup(root.destroy)
         app=SimpleNamespace(settings=SimpleNamespace(provider_backend='builtin'),selected=set(),invalidate=Mock())
-        with patch('wechat_local.access_ui.acquire_database') as database,patch('wechat_local.image_access_ui.acquire_images') as images:
-            dialog=AccessDialog(app,root,tk.StringVar(root),tk.StringVar(root))
+        with patch('wechat_local.access_ui.connect_database') as database,patch('wechat_local.image_access_ui.acquire_images') as images:
+            dialog=AccessDialog(app,root)
             dialog.start()
             self.assertFalse(dialog.busy)
             self.assertIn('确认',dialog.status.get())
@@ -128,15 +128,15 @@ class AccessTests(unittest.TestCase):
         root=tk.Tk();root.withdraw()
         self.addCleanup(root.destroy)
         app=SimpleNamespace(settings=SimpleNamespace(provider_backend='builtin'),selected=set(),invalidate=Mock())
-        dialog=AccessDialog(app,root,tk.StringVar(root),tk.StringVar(root))
+        dialog=AccessDialog(app,root)
         entered=threading.Event();finished=threading.Event()
         def acquire(*args,stop,**kwargs):
             entered.set()
             while not stop():time.sleep(.01)
             finished.set()
             raise KeyboardInterrupt()
-        with patch('wechat_local.access_ui.acquire_database',side_effect=acquire):
-            dialog.consent.set(True);dialog.exited.set(True)
+        with patch('wechat_local.access_ui.connect_database',side_effect=acquire):
+            dialog.consent.set(True)
             dialog.start()
             self.assertTrue(entered.wait(1))
             dialog.close()

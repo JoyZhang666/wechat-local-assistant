@@ -23,6 +23,10 @@ independently authored for this project. No upstream native binaries bundled.
   are excluded. The independently authored adapter requires a separate, explicit
   local access action and preserves existing authorization on failure.
 
+The application's automatic process/location discovery and reuse of a previously
+authorized account are independently authored. They do not restore the upstream
+process-killing or plaintext-key behavior.
+
 Frida is an optional, separately installed runtime dependency, not MIT-relicensed
 by this project. Frida Python/core use wxWindows Library Licence 3.1; retain its
 distributed notices, including Gum's third-party BSD notices. Official sources:

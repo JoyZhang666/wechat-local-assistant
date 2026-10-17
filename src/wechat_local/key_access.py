@@ -1,4 +1,4 @@
-"""Explicit, bounded database access. No CLI, key printing, killing or discovery of accounts."""
+"""Consented local access. Automatic discovery never prints keys or private paths."""
 import hashlib
 import hmac
 import importlib.metadata
@@ -27,6 +27,8 @@ MESSAGES={
     "access_capture_failed":"此微信版本或启动时机未能取得有效密钥；已停止，原授权保持。",
     "access_detach_failed":"无法确认附加已解除；请检查微信状态，原授权未覆盖。",
     "access_validation_failed":"所选账号的完整数据库认证或身份核对未通过，原授权保持。",
+    "access_account_not_found":"尚未发现可用的微信登录记录。请正常打开并登录Windows微信，再点连接；无需选择文件夹。",
+    "access_account_ambiguous":"未能唯一确认本次登录账号，未按文件新旧猜测。请在微信完成目标账号登录后重试。",
 }
 
 
@@ -188,3 +190,77 @@ def acquire_database(settings,account_root,account_id,executable,*,consent=False
         raw=None
     progress("saved")
     return {"success":True,"wechat_version":version,"identity_confirmed":True}
+
+
+def connect_database(settings,*,consent=False,stop=None,progress=None,seconds=90):
+    """Normal flow: user opens/logs into WeChat; all technical paths are private."""
+    if consent is not True:raise AccessError('access_consent_required')
+    if settings.provider_backend!='builtin':raise AccessError('access_validation_failed')
+    if not 1<=seconds<=120:raise ValueError('连接等待须为1—120秒。')
+    from .discovery import running_wechat,discover_accounts
+    from .common import read_json
+    from .credentials import reveal_key
+    stop=stop or (lambda:False)
+    progress=progress or (lambda phase:None)
+    deadline=time.monotonic()+seconds
+    progress('waiting')
+    detected=None
+    while time.monotonic()<deadline:
+        if stop():raise KeyboardInterrupt()
+        detected=running_wechat()
+        if detected:break
+        time.sleep(.25)
+    if not detected:raise AccessError('access_account_not_found')
+    executable,target,observed=detected
+    progress('checking')
+    path,version=inspect_executable(executable)
+    provider=BuiltinProvider(settings.data_dir,settings.data_dir/'cache')
+    accounts=discover_accounts(observed=observed)
+    active=[root for root in accounts if root in observed]
+    # A previously authorized account needs no new Frida attachment. Legacy
+    # records can be revalidated with the inferred canonical owner ID.
+    if provider.authorization.is_file() and provider.authorization.stat().st_size<=32768:
+        try:
+            record=json.loads(reveal_key(read_json(provider.authorization)['dpapi']))
+            root=plain(record['root'])
+            allowed=active if active else accounts if len(accounts)==1 else []
+            if root in allowed and re.fullmatch(r'[a-fA-F0-9]{64}',record['key']):
+                if stop():raise KeyboardInterrupt()
+                progress('validating')
+                provider.import_key(root,account_identity(root),record['key'],consent=True,cancelled=stop)
+                progress('saved')
+                return {'success':True,'wechat_version':version,'identity_confirmed':True,'reused':True}
+        except (OSError,ValueError,KeyError):pass
+    try:
+        if importlib.metadata.version('frida')!='17.23.1':raise ImportError()
+        import frida
+    except (ImportError,importlib.metadata.PackageNotFoundError):
+        raise AccessError('access_dependency_missing') from None
+    if main_process(path)!=target:raise AccessError('access_process_denied')
+    matched=[]
+    def verify(raw):
+        if stop():raise KeyboardInterrupt()
+        roots=discover_accounts(observed=observed)
+        valid=[]
+        for root in roots:
+            if stop():raise KeyboardInterrupt()
+            try:
+                with plain(root/'db_storage/session/session.db').open('rb') as handle:page=handle.read(4096)
+                if matches_page(raw,page):valid.append(root)
+            except OSError:continue
+        if len(valid)>1:
+            active_valid=[root for root in valid if root in observed]
+            if len(active_valid)!=1:raise AccessError('access_account_ambiguous')
+            valid=active_valid
+        matched[:]=valid
+        return len(valid)==1
+    raw=capture(frida.get_local_device(),target[0],verify,stop=stop,deadline=deadline,progress=progress)
+    progress('detached')
+    try:
+        if stop():raise KeyboardInterrupt()
+        progress('validating')
+        provider.import_key(matched[0],account_identity(matched[0]),raw.hex(),consent=True,cancelled=stop)
+    except (OSError,ValueError):raise AccessError('access_validation_failed') from None
+    finally:raw=None
+    progress('saved')
+    return {'success':True,'wechat_version':version,'identity_confirmed':True,'reused':False}

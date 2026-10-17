@@ -193,7 +193,7 @@ class App:
         ttk.Label(row,text="搜索",style="Muted.TLabel").pack(side="left",padx=px((0,6)))
         ttk.Entry(row,textvariable=self.search,width=16).pack(side="left",fill="x",expand=True)
         self.search.trace_add("write",lambda *_:self.render_chats())
-        self.refresh_button=ttk.Button(row,text="刷新",style="Quiet.TButton",command=self.refresh)
+        self.refresh_button=ttk.Button(row,text="连接／刷新",style="Quiet.TButton",command=self.refresh)
         self.refresh_button.pack(side="right",padx=px((6,0)))
         filters=ttk.Frame(chats,style="Card.TFrame")
         filters.pack(fill="x",pady=px(8))
@@ -606,8 +606,27 @@ class App:
 
     def refresh(self):
         if self.need_settings() and not self.active:
+            if self.settings.provider_backend=="builtin":
+                from .builtin_provider import BuiltinProvider
+                from .history import HistoryError
+                try:BuiltinProvider(self.settings.data_dir,self.settings.data_dir/"cache")._access()
+                except (HistoryError,OSError,ValueError,KeyError):
+                    self.connect_wechat()
+                    return
             self.invalidate()
             self.run("list",private_output=self.settings.data_dir/"chat-list.json")
+
+    def connect_wechat(self,parent=None):
+        if not self.need_settings() or self.active:return
+        if self.settings.provider_backend!="builtin":
+            self.refresh()
+            return
+        from .access_ui import AccessDialog
+        existing=getattr(self,"access_dialog",None)
+        if existing and existing.window.winfo_exists():
+            existing.window.lift()
+            return
+        self.access_dialog=AccessDialog(self,parent or self.root)
 
     def prepare(self):
         if not self.need_settings() or not self.selected or self.active:
@@ -1030,24 +1049,24 @@ class App:
         reader_tab=ttk.Frame(tabs,padding=12)
         tabs.add(reader_tab,text="微信首次接入")
         reader_backend=tk.StringVar(value=values.get("provider_backend","external" if values.get("provider_dir") else "builtin"))
+        advanced=ttk.LabelFrame(reader_tab,text="高级手动接入（通常不用）",padding=8)
         for value,label in (("builtin","内置MIT读取后端（新安装推荐）"),("external","兼容已有外置读取组件")):
-            ttk.Radiobutton(reader_tab,text=label,variable=reader_backend,value=value).pack(anchor="w",fill="x",pady=4)
-        ttk.Label(reader_tab,text="先保存本机配置。推荐由程序协助本人账号首次接入，不需要复制密钥；只有点击接入并明确授权后才会临时附加微信。手动导入仅作高级备用。数据库密钥与图片密钥不同。",wraplength=600).pack(anchor="w",pady=8)
+            ttk.Radiobutton(advanced,text=label,variable=reader_backend,value=value).pack(anchor="w",fill="x",pady=4)
+        ttk.Label(reader_tab,text="和往常一样打开Windows微信并登录，再点击“连接微信”。程序自动识别账号和记录位置，已保存授权自动复用，不需要选择目录或填写账号ID。首次连接仅确认一次本机授权。",wraplength=600).pack(anchor="w",pady=8)
         reader_root=tk.StringVar()
         reader_account=tk.StringVar()
         reader_key=tk.StringVar()
         reader_consent=tk.BooleanVar(value=False)
         def assist_access():
-            from .access_ui import AccessDialog
-            existing=getattr(self,"access_dialog",None)
-            if existing and existing.window.winfo_exists():
-                existing.window.lift()
-                return
-            self.access_dialog=AccessDialog(self,window,reader_root,reader_account)
-        ttk.Button(reader_tab,text="协助接入本人微信（推荐）",style="Primary.TButton",command=assist_access).pack(fill="x",pady=8)
+            self.connect_wechat(window)
+        ttk.Button(reader_tab,text="连接微信（自动识别）",style="Primary.TButton",command=assist_access).pack(fill="x",pady=8)
+        def toggle_reader_advanced():
+            if advanced.winfo_manager():advanced.pack_forget()
+            else:advanced.pack(fill="x",pady=8)
+        ttk.Button(reader_tab,text="高级排错／手动导入",style="Quiet.TButton",command=toggle_reader_advanced).pack(anchor="w",pady=4)
         for title,var,hidden in (("本人账号目录（含db_storage）",reader_root,False),("本人账号ID（不是昵称）",reader_account,False),("已授权数据库密钥（64位十六进制）",reader_key,True)):
-            ttk.Label(reader_tab,text=title).pack(anchor="w")
-            row=ttk.Frame(reader_tab)
+            ttk.Label(advanced,text=title).pack(anchor="w")
+            row=ttk.Frame(advanced)
             row.pack(fill="x",pady=(3,7))
             ttk.Entry(row,textvariable=var,show="*" if hidden else "",width=55).pack(side="left",fill="x",expand=True)
             if var is reader_root:
@@ -1055,7 +1074,7 @@ class App:
                     path=filedialog.askdirectory(parent=window,title="选择本人账号目录（下含db_storage）")
                     if path:reader_root.set(path)
                 ttk.Button(row,text="选择目录",command=choose_account).pack(side="left",padx=4)
-        ttk.Checkbutton(reader_tab,text="我确认这是本人账号，并同意仅在本机导入和读取",variable=reader_consent).pack(anchor="w",pady=5)
+        ttk.Checkbutton(advanced,text="我确认这是本人账号，并同意仅在本机导入和读取",variable=reader_consent).pack(anchor="w",pady=5)
         def import_database_key():
             try:
                 from .builtin_provider import BuiltinProvider
@@ -1071,7 +1090,7 @@ class App:
             except Exception:
                 reader_key.set("")
                 messagebox.showerror("接入未保存","请检查已保存配置、本人账号目录与ID、密钥和确认选项。未覆盖原接入记录。",parent=window)
-        ttk.Button(reader_tab,text="验证并导入数据库密钥（仅本机）",command=import_database_key).pack(anchor="w",pady=8)
+        ttk.Button(advanced,text="验证并导入数据库密钥（仅本机）",command=import_database_key).pack(anchor="w",pady=8)
         local_tab=ttk.Frame(tabs,padding=8)
         cloud_tab=ttk.Frame(tabs,padding=8)
         tabs.add(local_tab,text="本机与媒体")

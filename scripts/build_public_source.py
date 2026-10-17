@@ -29,7 +29,7 @@ OPTIONAL = (
     "docs/public-install.md", "tests/test_history.py", "tests/test_selected_summary.py",
     "tests/test_gui_workflow.py", "tests/test_model_runtime.py", "tests/test_export.py",
     "tests/test_media.py", "tests/test_voice.py", "tests/test_image.py", "tests/test_asr.py",
-    "tests/test_onboarding.py", "tests/test_first_access.py", "tests/test_image_access.py", "docs/first-access.md",
+    "tests/test_onboarding.py", "tests/test_first_access.py", "tests/test_image_access.py", "tests/test_auto_connection.py", "docs/first-access.md",
     "tests/test_bundle.py", "tests/test_cloud.py", "tests/test_membership.py", "tests/test_summary_reading.py", "tests/test_summary_structure.py", "tests/test_media_summary.py",
 )
 SOURCE_VERSION = "v" + __version__
