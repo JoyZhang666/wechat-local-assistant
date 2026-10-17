@@ -33,7 +33,7 @@ OPTIONAL = (
     "tests/test_bundle.py", "tests/test_cloud.py", "tests/test_membership.py", "tests/test_summary_reading.py", "tests/test_summary_structure.py", "tests/test_media_summary.py",
 )
 SOURCE_VERSION = "v" + __version__
-STATUS = f"""SOURCE PRERELEASE — EXPERIMENTAL WINDOWS COMPATIBILITY
+STATUS = f"""TECHNICAL-USER SOURCE RELEASE — WINDOWS
 
 Version: {SOURCE_VERSION}
 
@@ -41,16 +41,17 @@ This source package was built from an explicit file allowlist.
 It excludes private configuration, keys, chat data, reports, models, runtime,
 virtual environments, vendor binaries and Git history.
 
-Independent newly written code in this candidate is covered by MIT, subject
+Independent newly written code in this release is covered by MIT, subject
 to LICENSE-SCOPE.md. This does not license the existing local installation,
 original vendor package, model weights, or third-party WeChat components.
-Final source and generated assets still require release review.
+See docs/release-notes.md for the release scope and validation limits.
 
 An MIT built-in reader is included with preserved third-party license notices.
 Each user must complete their own authorized local database-key onboarding.
 External native provider binaries are not bundled.
 No access consent, account material or authorization transfers with this pack.
-The synthetic demo does not prove compatibility with a real WeChat install.
+Compatibility depends on the WeChat version, data format and local setup.
+Hosted synthetic checks do not establish universal real-client compatibility.
 
 This build is not a complete security, privacy or license audit. Hashes prove
 file integrity only. Public publishing and installing this Skill are separate

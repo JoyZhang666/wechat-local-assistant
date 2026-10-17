@@ -271,7 +271,7 @@ class CloudTests(unittest.TestCase):
             result=execute(SimpleNamespace(command="cloud-test",job="b"*32,allow_cloud=True),settings,lambda _:None)
         self.assertTrue(result["synthetic_test"])
         self.assertEqual(len(captured),3)
-        self.assertTrue(all(row["text"].startswith("合成测试：") for row in captured))
+        self.assertTrue(all(row["text"].startswith("内置虚构材料：") for row in captured))
         self.assertFalse((self.root/"jobs"/("b"*32)/"snapshot").exists())
 
 

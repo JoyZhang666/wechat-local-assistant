@@ -160,7 +160,7 @@ class App:
         model_actions.columnconfigure(0,weight=1)
         self.member_login_button=ttk.Button(model_actions,text="登录ChatGPT会员",style="Quiet.TButton",command=self.member_login)
         self.member_login_button.grid(row=0,column=0,sticky="ew")
-        self.cloud_test_button=ttk.Button(model_actions,text="测试云端摘要（示例）",style="Quiet.TButton",command=self.cloud_test,state="disabled")
+        self.cloud_test_button=ttk.Button(model_actions,text="检查云端连接",style="Quiet.TButton",command=self.cloud_test,state="disabled")
         self.cloud_test_button.grid(row=1,column=0,sticky="ew",pady=px((6,0)))
 
         self.task_status=task_status=ttk.Frame(self.root,style="Panel.TFrame",padding=px((8,6)))
@@ -388,7 +388,7 @@ class App:
         content.pack(fill="both",expand=True)
         ttk.Label(content,text="从选择到阅读，按顺序完成",style="Heading.TLabel").pack(anchor="w",pady=self.pixels((0,12)))
         self.guide_paragraphs=(
-            "一、模型（左侧）：选择模型与连接方式用于选择本地模型、云端API或会员模型并配置连接；登录ChatGPT会员用于授权本助手使用会员额度；测试云端摘要（示例）仅发送虚构材料，验证连接和摘要能力，本地模式下不启用。",
+            "一、模型（左侧）：选择模型与连接方式用于选择本地模型、云端API或会员模型并配置连接；登录ChatGPT会员用于授权本助手使用会员额度；检查云端连接仅发送内置虚构材料，验证连接和摘要能力，本地模式下不启用。",
             "二、聊天（左侧）：点击刷新读取列表，搜索后勾选需要处理的群聊或联系人。程序不会默认选择全部聊天。",
             "三、时间范围（右侧）：填写北京时间的开始／结束时间，结束时刻不包含在范围内；也可点击快捷日期。",
             "四、开始处理（右侧）：生成摘要页先点击1预览数量，再点击2识别媒体并生成摘要。完整导出只能选择一个聊天：1只识别并导出记录，2识别后生成摘要（同时保留记录包）。",
@@ -665,10 +665,10 @@ class App:
     def cloud_test(self):
         if self.active or not self.need_settings() or self.settings.model_backend=="local":
             return
-        notice="仅发送3条内置虚构文字及其摘要合并材料，不读取微信。\n服务：%s\n模型：%s\n会产生少量API费用。是否开始合成连接与摘要测试？"%(
+        notice="仅发送3条内置虚构文字及其摘要合并材料，不读取微信。\n服务：%s\n模型：%s\nAPI模式可能产生少量费用；会员模式使用现有额度。是否检查连接与摘要能力？"%(
             "OpenAI会员（共用计划额度）" if self.settings.model_backend=="membership" else self.settings.cloud_base_url,
             self.settings.membership_model if self.settings.model_backend=="membership" else self.settings.cloud_model)
-        if messagebox.askyesno("合成数据云端测试",notice,parent=self.root):
+        if messagebox.askyesno("检查云端连接",notice,parent=self.root):
             self.invalidate()
             self.run("cloud-test",uuid.uuid4().hex,allow_cloud=True)
 
@@ -752,7 +752,7 @@ class App:
             self.last_progress_at=time.monotonic()
             phase=event.get("phase")
             if phase=="member-ready":
-                self.status.set("会员账户和模型已更新。打开模型设置选择会员账户及模型，再点合成测试。" if event.get("action")!="member-logout"
+                self.status.set("会员账户和模型已更新。打开模型设置选择会员账户及模型，再点“检查云端连接”。" if event.get("action")!="member-logout"
                                 else "已退出此会员账户。" if event.get("revoked") else "已清除本机会员令牌；远端撤销未确认，请在ChatGPT设置中断开。")
             elif phase=="listed":
                 self.chats=read_json(self.settings.data_dir/"chat-list.json")["chats"]
@@ -774,7 +774,7 @@ class App:
                 if self.active_command not in ("render-summary","save-summary","save-export"):
                     self.prepared=None
                 if phase=="complete":
-                    self.status.set("合成测试摘要生成完成。请核对测试甲、10月12日15:00、方案A和300元预算；没有读取微信。" if event.get("synthetic_test")
+                    self.status.set("云端连接检查完成，摘要已生成。请核对成员甲、10月12日15:00、方案A和300元预算；仅使用内置虚构材料，没有读取微信。" if event.get("synthetic_test")
                                     else "生成完成，复用了本机检查点，本次没有新增模型请求；快照已清理。" if event.get("checkpoint_only")
                                     else "生成完成，采用所选云端模型；摘要保存在本机，输入快照已清理。" if event.get("model_backend") in ("cloud","membership")
                                     else "生成完成，完整输入快照已清理，模型已释放。摘要与短引用保存在本机。")
@@ -1123,7 +1123,7 @@ class App:
             index=next((i for i,a in enumerate(accounts) if a["id"]==account_id.get()),0)
             account_combo.current(index)
             selected_account()
-        ttk.Label(member_tab,text="1. 点击会员登录，在官方网页亲自确认授权。\n2. 登录完成后重新打开本设置页，选择账户和服务器返回的模型。\n3. 选择会员模式并保存，再点击合成测试。\n与Codex/ChatGPT Work共用额度；不自动转API收费。图片/语音仍本地。",wraplength=600).pack(pady=10)
+        ttk.Label(member_tab,text="1. 点击会员登录，在官方网页亲自确认授权。\n2. 登录完成后重新打开本设置页，选择账户和服务器返回的模型。\n3. 选择会员模式并保存，再点击“检查云端连接”。\n与Codex/ChatGPT Work共用额度；不自动转API收费。图片/语音仍本地。",wraplength=600).pack(pady=10)
         member_actions=ttk.Frame(member_tab)
         member_actions.pack(fill="x")
         def member_action(action,account):
@@ -1172,7 +1172,7 @@ class App:
         ttk.Button(image_tab,text="保存图片密钥（仅本机）",command=save_image_key).pack(anchor="w",pady=(0,12))
         ttk.Label(image_tab,textvariable=image_status,wraplength=600).pack(anchor="w")
         ttk.Label(local_tab,text="组件和模型须已部署；图片/语音识别始终使用这些本地设置。此处不取钥、不自动下载。",wraplength=600).pack(pady=10)
-        ttk.Label(cloud_tab,text="1. 在服务商官网开通API，获取Key和模型名（不是聊天App登录）。\n2. 填Base URL，例如 https://api.example.com/v1，不含/chat/completions。\n3. 填模型与Key并保存；生成摘要时再次确认发送范围。\n接口需支持Chat Completions与JSON模式。切换后不自动上传、不自动测试。",wraplength=600).pack(anchor="w",pady=(0,10))
+        ttk.Label(cloud_tab,text="1. 在服务商官网开通API，获取Key和模型名（不是聊天App登录）。\n2. 填Base URL，如 https://api.example.com/v1，不含/chat/completions。\n3. 填模型与Key并保存；生成摘要时再次确认发送范围。\n接口需支持Chat Completions与JSON模式。切换后不自动上传、不自动检查连接。",wraplength=600).pack(anchor="w",pady=(0,10))
         cloud_fields={}
         for key,title,initial in (("cloud_base_url","Base URL",values.get("cloud_base_url","")),
                                   ("cloud_model","云端模型名",values.get("cloud_model","")),
