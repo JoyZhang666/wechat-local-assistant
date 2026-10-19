@@ -33,19 +33,24 @@ class Settings:
     provider_backend: str = "external"
 
     @classmethod
-    def load(cls, path):
+    def load(cls, path, purpose="summary"):
+        if purpose not in ("basic","reader","summary","local","voice"):
+            raise ValueError("未知配置校验操作。")
         if not Path(path).is_file():
             raise ValueError("尚未配置。请将 config.example.json 复制为私有配置，并填写本机路径。")
         data = read_json(path)
+        if not isinstance(data,dict):raise ValueError("配置文件应为JSON对象；请从备份恢复或重新填写。")
         backend=data.get("model_backend","local")
         if backend not in ("local","cloud","membership"):
             raise ValueError("模型来源必须为本地或云端。")
         provider_backend=data.get("provider_backend","external" if data.get("provider_dir") else "builtin")
         if provider_backend not in ("builtin","external"):
             raise ValueError("读取后端必须为builtin或external。")
-        required=("data_dir",) + (("provider_dir",) if provider_backend=="external" else ())
-        if backend=="local":
+        required=("data_dir",) + (("provider_dir",) if purpose=="reader" and provider_backend=="external" else ())
+        if purpose=="local" or (purpose=="summary" and backend=="local"):
             required+=("ollama_executable","model_dir","model")
+        if purpose=="voice":
+            required+=("asr_model_dir",)
         for name in required:
             if not isinstance(data.get(name), str) or not data[name].strip():
                 raise ValueError("本机配置缺少：" + name)
@@ -67,7 +72,7 @@ class Settings:
         url,model,key=(data.get(n,"") for n in ("cloud_base_url","cloud_model","cloud_key_dpapi"))
         if any(not isinstance(x,str) for x in (url,model,key)):
             raise ValueError("云端配置格式无效。")
-        if backend=="cloud":
+        if backend=="cloud" and purpose=="summary":
             from .cloud import cloud_endpoint
             cloud_endpoint(url)
             if not model.strip() or any(c in model for c in ("\n","\r","\0")) or not key:

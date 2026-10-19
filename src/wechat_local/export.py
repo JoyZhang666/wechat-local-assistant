@@ -108,6 +108,9 @@ def _annotation(message: dict, assets: list[dict], callback) -> dict:
         return result
     try:
         value = callback(message, assets)
+        if isinstance(value,dict) and value.get("status")=="missing" and value.get("error_code")=="recognition_not_requested":
+            result["data"]={"error_code":"recognition_not_requested"}
+            return result
         if (not isinstance(value, dict) or value.get("status") != "complete"
                 or value.get("message_id", message["id"]) != message["id"]):
             result["status"] = "error"

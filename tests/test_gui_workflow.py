@@ -90,6 +90,9 @@ class NativeSelectionTests(unittest.TestCase):
         self.root=tk.Tk()
         self.root.withdraw()
         self.app=App(self.root,Path(self.temp.name)/"absent-config.json")
+        guard=patch.object(self.app,"check_account",return_value=True)
+        guard.start()
+        self.addCleanup(guard.stop)
         self.app.chats=[{"id":"room@chatroom","name":"重复名字","is_group":True,"last_time":0},
                         {"id":"single-person","name":"重复名字","is_group":False,"last_time":0}]
         self.app.render_chats()
@@ -187,6 +190,8 @@ class NativeSelectionTests(unittest.TestCase):
 
     def test_media_summary_preview_and_export_buttons_preserve_cloud_consent(self):
         self.cloud_preview()
+        self.app.recognize_images.set(True)
+        self.app.recognize_voice.set(True)
         self.app.selected={"room@chatroom"}
         with patch.object(self.app,"run") as run:
             self.app.prepare()
@@ -205,7 +210,7 @@ class NativeSelectionTests(unittest.TestCase):
             self.app.export_records(summarize=True)
         self.assertTrue(run.call_args.kwargs["summarize"])
         self.assertTrue(run.call_args.kwargs["allow_cloud"])
-        self.assertEqual(self.app.model_heading["text"],"一、模型")
+        self.assertEqual(self.app.model_heading["text"],"一、连接状态")
         self.assertEqual(self.app.range_heading["text"],"三、时间范围")
         self.assertEqual(self.app.processing_heading["text"],"四、开始处理")
         self.assertEqual(self.app.result_title.get(),"五、查看结果")
@@ -664,7 +669,9 @@ class NativeSelectionTests(unittest.TestCase):
                     for widget in (app.config_button,app.range_controls[0],app.preview_button,app.generate_button,app.open_summary_button,app.status_label):
                         self.assertTrue(widget.winfo_ismapped())
                         self.assertLessEqual(widget.winfo_rootx()+widget.winfo_width(),window.winfo_rootx()+window.winfo_width())
-                        self.assertLessEqual(widget.winfo_rooty()+widget.winfo_height(),window.winfo_rooty()+window.winfo_height())
+                    # The body scrolls at large font sizes; progress remains fixed.
+                    self.assertLessEqual(app.status_label.winfo_rooty()+app.status_label.winfo_height(),window.winfo_rooty()+window.winfo_height())
+                    self.assertGreaterEqual(app.workspace.winfo_height(),app.workspace_canvas.winfo_height())
                     self.assertGreaterEqual(app.text.winfo_height(),60)
                 finally:
                     for pending in window.tk.call("after","info"):

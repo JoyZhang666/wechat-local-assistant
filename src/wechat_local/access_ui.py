@@ -86,6 +86,8 @@ class AccessDialog:
                 self.connected=True
                 self.status.set("已连接微信，账号及记录位置已自动识别。请关闭设置并刷新聊天列表。")
                 self.app.selected.clear()
+                self.app.bound_account=None
+                self.app.offline_account=False
                 self.app.invalidate()
         if self.busy:
             self.window.after(100,self.poll)

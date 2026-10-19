@@ -44,6 +44,26 @@ class CloudTests(unittest.TestCase):
             with self.assertRaises(ValueError): cloud_endpoint(url)
         self.assertIsNone(NoRedirect().redirect_request(None,None,None,None,None,None,None))
 
+    def test_first_cloud_call_prepares_runtime_without_saving_again(self):
+        model=CloudModel(None,self.root)
+        process=Mock(returncode=0)
+        process.communicate.return_value=('{"success":true,"content":"ready"}',None)
+        with patch("wechat_local.cloud.sys.executable",str(self.root/"python.exe")),\
+             patch("wechat_local.cloud.ensure_cloud_interpreter",return_value=self.root/"python-cloud-api.exe") as setup,\
+             patch("wechat_local.cloud.subprocess.Popen",return_value=process) as launch:
+            self.assertEqual(model.call(self.request,30)["content"],"ready")
+        setup.assert_called_once()
+        self.assertEqual(launch.call_args.args[0][0],str(self.root/"python-cloud-api.exe"))
+
+    def test_failed_runtime_setup_never_launches_request(self):
+        model=CloudModel(None,self.root)
+        with patch("wechat_local.cloud.sys.executable",str(self.root/"python.exe")),\
+             patch("wechat_local.cloud.ensure_cloud_interpreter",side_effect=ValueError("synthetic failure")),\
+             patch("wechat_local.cloud.subprocess.Popen") as launch,self.assertRaisesRegex(ValueError,"初始化失败"):
+            model.call(self.request,30)
+        launch.assert_not_called()
+        self.assertEqual(model.last_error_code,"cloud_runtime_setup_failed")
+
     def test_host_runtime_update_keeps_matching_owned_worker_without_overwrite(self):
         scripts=self.root/'venv'/'Scripts';scripts.mkdir(parents=True)
         (scripts.parent/'pyvenv.cfg').write_text('synthetic',encoding='utf-8')
