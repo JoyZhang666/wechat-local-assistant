@@ -29,6 +29,8 @@ class App:
         self.root=root
         self.config_path=Path(config_path)
         self.settings=None
+        self.bound_account=None
+        self.offline_account=False
         self.chats=[]
         self.selected=set()
         self.prepared=None
@@ -47,15 +49,18 @@ class App:
         self.started_at=None
         self.last_progress_at=None
         self.ui_scale=max(1,float(self.root.tk.call("tk","scaling"))*0.75)
-        self.root.title("微信本地助手 · 选择聊天，按需运行")
-        self.root.geometry(f"{self.pixels(1160)}x{self.pixels(820)}")
-        self.root.minsize(self.pixels(920),self.pixels(660))
+        from . import __version__
+        self.root.title("微信本地助手 · v"+__version__+" · 选择聊天，按需运行")
+        available_w=max(400,self.root.winfo_screenwidth()-60)
+        available_h=max(300,self.root.winfo_screenheight()-90)
+        self.root.geometry(f"{min(self.pixels(1160),available_w)}x{min(self.pixels(820),available_h)}")
+        self.root.minsize(min(self.pixels(800),available_w),min(self.pixels(540),available_h))
         self.root.protocol("WM_DELETE_WINDOW",self.close)
         self.build()
         try:
-            self.settings=Settings.load(self.config_path)
+            self.settings=Settings.load(self.config_path,purpose="basic")
         except Exception:
-            self.status.set("请先填写本机配置；不会自动连接微信或提取密钥。")
+            self.status.set("请正常登录微信，再连接。仅生成摘要或识别媒体时需要配置模型。")
         else:
             self.update_model_label()
             self.root.after(200,self.restore_latest)
@@ -69,7 +74,7 @@ class App:
         style=ttk.Style(self.root)
         if "clam" in style.theme_names():
             style.theme_use("clam")
-        bg,surface,ink,muted,line,accent="#f3f6fa","#ffffff","#182230","#53657b","#dce4ee","#2563eb"
+        bg,surface,ink,muted,line,accent="#f4f5fa","#ffffff","#182230","#53657b","#dce4ee","#4954c8"
         self.root.configure(background=bg)
         style.configure(".",font=("Microsoft YaHei UI",10),background=bg,foreground=ink)
         style.configure("TFrame",background=bg)
@@ -125,12 +130,33 @@ class App:
         self.onboarding_button.pack(side="right",padx=px((0,8)))
         guide=ttk.Frame(self.root,padding=px((16,0,16,8)))
         guide.pack(fill="x")
-        self.guide_label=ttk.Label(guide,text="左侧配置模型、勾选聊天 → 右侧选择时间、预览数量 → 生成摘要或导出 → 阅读与保存。",foreground=muted)
+        self.guide_label=ttk.Label(guide,text="连接微信 → 选择聊天与时间 → 确认处理内容 → 阅读与保存。原记录导出无需模型，识别与摘要按需配置。",foreground=muted)
         self.guide_label.pack(fill="x")
         guide.bind("<Configure>",lambda e:self.guide_label.configure(wraplength=max(px(240),e.width-px(32))))
 
-        self.workspace=ttk.Frame(self.root)
-        self.workspace.pack(fill="both",expand=True,padx=px(16),pady=px((0,12)))
+        self.body=ttk.Frame(self.root)
+        self.body.pack(fill="both",expand=True,padx=px(16),pady=px((0,12)))
+        self.workspace_canvas=tk.Canvas(self.body,background=bg,highlightthickness=0)
+        body_scroll=ttk.Scrollbar(self.body,orient="vertical",command=self.workspace_canvas.yview)
+        self.workspace_canvas.configure(yscrollcommand=body_scroll.set)
+        body_scroll.pack(side="right",fill="y")
+        self.workspace_canvas.pack(side="left",fill="both",expand=True)
+        self.workspace=ttk.Frame(self.workspace_canvas)
+        workspace_id=self.workspace_canvas.create_window(0,0,window=self.workspace,anchor="nw")
+        def fit_workspace(event=None):
+            self.workspace_canvas.itemconfigure(workspace_id,width=self.workspace_canvas.winfo_width(),
+                height=max(self.workspace_canvas.winfo_height(),self.workspace.winfo_reqheight()))
+            self.workspace_canvas.configure(scrollregion=self.workspace_canvas.bbox("all"))
+        self.workspace_canvas.bind("<Configure>",fit_workspace)
+        self.workspace.bind("<Configure>",fit_workspace)
+        def show_focused(event):
+            widget=event.widget
+            if not str(widget).startswith(str(self.workspace)+"."):return
+            top=widget.winfo_rooty()-self.workspace_canvas.winfo_rooty()
+            if top<0 or top+widget.winfo_height()>self.workspace_canvas.winfo_height():
+                position=widget.winfo_rooty()-self.workspace.winfo_rooty()
+                self.workspace_canvas.yview_moveto(max(0,position-px(10))/max(1,self.workspace.winfo_height()))
+        self.root.bind("<FocusIn>",show_focused,add="+")
         self.workspace.rowconfigure(0,weight=1)
         self.workspace.columnconfigure(0,weight=3,uniform="workspace")
         self.workspace.columnconfigure(2,weight=7,uniform="workspace")
@@ -146,17 +172,28 @@ class App:
         self.model_label=tk.StringVar(value="文字摘要：本地模型（默认）")
         connection=ttk.Frame(left,style="Panel.TFrame",padding=px(8))
         connection.pack(fill="x",pady=px((0,10)))
-        self.model_heading=ttk.Label(connection,text="一、模型",style="Heading.TLabel")
+        self.model_heading=ttk.Label(connection,text="一、连接状态",style="Heading.TLabel")
         self.model_heading.pack(anchor="w",pady=px((0,6)))
+        self.account_label=tk.StringVar(value="微信：尚未核对当前账号")
+        account_status=ttk.Label(connection,textvariable=self.account_label,style="Card.TLabel")
+        account_status.pack(fill="x",pady=px((0,6)))
+        account_status.bind("<Configure>",lambda e:account_status.configure(wraplength=max(120,e.width)))
         self.model_status_label=ttk.Label(connection,textvariable=self.model_label,style="Muted.TLabel")
         self.model_status_label.pack(fill="x",pady=px((0,8)))
         self.model_status_label.bind("<Configure>",lambda e:self.model_status_label.configure(wraplength=max(120,e.width)))
-        self.config_button=ttk.Button(connection,text="选择模型与连接方式",command=self.configure)
+        self.connect_button=ttk.Button(connection,text="连接当前微信",style="Primary.TButton",command=self.connect_wechat)
+        self.connect_button.pack(fill="x",pady=px((0,6)))
+        self.config_button=ttk.Button(connection,text="模型、媒体与连接方式",command=self.configure)
         self.config_button.pack(fill="x")
         self.runtime_button=ttk.Button(connection,text="初始化本项目运行程序",style="Quiet.TButton",command=self.initialize_runtime)
-        self.runtime_button.pack(fill="x",pady=px((6,0)))
         model_actions=ttk.Frame(connection,style="Card.TFrame")
-        model_actions.pack(fill="x",pady=px((6,0)))
+        def advanced_connections():
+            if model_actions.winfo_manager():model_actions.pack_forget();self.runtime_button.pack_forget()
+            else:
+                self.runtime_button.pack(fill="x",pady=px((6,0)))
+                model_actions.pack(fill="x",pady=px((6,0)))
+        self.connection_more=ttk.Button(connection,text="更多连接操作 ▾",style="Quiet.TButton",command=advanced_connections)
+        self.connection_more.pack(fill="x",pady=px((6,0)))
         model_actions.columnconfigure(0,weight=1)
         self.member_login_button=ttk.Button(model_actions,text="登录ChatGPT会员",style="Quiet.TButton",command=self.member_login)
         self.member_login_button.grid(row=0,column=0,sticky="ew")
@@ -164,7 +201,7 @@ class App:
         self.cloud_test_button.grid(row=1,column=0,sticky="ew",pady=px((6,0)))
 
         self.task_status=task_status=ttk.Frame(self.root,style="Panel.TFrame",padding=px((8,6)))
-        task_status.pack(side="bottom",fill="x",padx=px(16),pady=px((0,12)),before=self.workspace)
+        task_status.pack(side="bottom",fill="x",padx=px(16),pady=px((0,12)),before=self.body)
         status_row=ttk.Frame(task_status,style="Card.TFrame")
         status_row.pack(fill="x")
         ttk.Label(status_row,text="任务进度",style="Heading.TLabel").pack(side="left")
@@ -175,7 +212,7 @@ class App:
         progress_track.pack_propagate(False)
         self.progress=ttk.Progressbar(progress_track,mode="determinate")
         self.progress.pack(fill="both",expand=True)
-        self.status=tk.StringVar(value="请先配置模型，再选择聊天和时间。")
+        self.status=tk.StringVar(value="正常登录微信后连接，选择聊天和时间；不会自动运行模型。")
         self.status_label=ttk.Label(task_status,textvariable=self.status,style="Card.TLabel")
         self.status_label.pack(fill="x",pady=px((4,0)))
         self.status_label.bind("<Configure>",lambda e:self.status_label.configure(wraplength=max(200,e.width)))
@@ -205,7 +242,7 @@ class App:
         ttk.Button(filters,text="清空",style="Quiet.TButton",command=self.clear_selection).pack(side="left")
         treebox=ttk.Frame(chats,style="Card.TFrame")
         treebox.pack(fill="both",expand=True)
-        self.tree=ttk.Treeview(treebox,columns=("check","name","kind","last"),show="headings",selectmode="browse")
+        self.tree=ttk.Treeview(treebox,columns=("check","name","kind","last"),show="headings",selectmode="browse",height=7)
         for key,title,width in (("check","选",32),("name","聊天名称",136),("kind","类型",55),("last","最近记录",100)):
             self.tree.heading(key,text=title)
             self.tree.column(key,width=px(width),minwidth=px(width if key!="name" else 80),stretch=key=="name")
@@ -240,11 +277,17 @@ class App:
             self.range_controls.append(entry)
         presets=ttk.Frame(ranges,style="Card.TFrame")
         presets.grid(row=2,column=0,columnspan=2,sticky="w")
+        self.preset_buttons=[]
         for value,label in (("today","今天"),("yesterday","昨天"),("24","近24小时"),
                             ("48","过去48小时"),("72","过去72小时"),("7","近7天")):
             button=ttk.Button(presets,text=label,style="Quiet.TButton",command=lambda v=value:self.preset(v))
-            button.pack(side="left",padx=px((0,6)))
+            self.preset_buttons.append(button)
             self.range_controls.append(button)
+        def fit_presets(event):
+            count=6 if event.width>=px(600) else 3
+            for index,button in enumerate(self.preset_buttons):
+                button.grid(row=index//count,column=index%count,sticky="ew",padx=px((0,4)),pady=px(2))
+        ranges.bind("<Configure>",fit_presets)
         self.start.trace_add("write",lambda *_:self.invalidate())
         self.end.trace_add("write",lambda *_:self.invalidate())
 
@@ -258,7 +301,17 @@ class App:
         self.export_task=ttk.Frame(self.task_tabs,style="Card.TFrame")
         self.task_tabs.add(self.summary_task,text="A. 生成摘要")
         self.task_tabs.add(self.export_task,text="B. 导出完整聊天记录")
-        self.preview_label=tk.StringVar(value="先预览数量，再识别媒体并生成摘要；识别后的文字会纳入摘要。")
+        self.recognize_images=tk.BooleanVar(value=False)
+        self.recognize_voice=tk.BooleanVar(value=False)
+        self.media_controls=[]
+        for tab in (self.summary_task,self.export_task):
+            options=ttk.Frame(tab,style="Card.TFrame")
+            options.pack(fill="x",pady=px((4,6)))
+            for label,var in (("识别图片内容（本机）",self.recognize_images),("语音转文字（本机）",self.recognize_voice)):
+                control=ttk.Checkbutton(options,text=label,variable=var,command=self.invalidate)
+                control.pack(anchor="w")
+                self.media_controls.append(control)
+        self.preview_label=tk.StringVar(value="先预览所选范围，再生成摘要。勾选媒体识别后，识别结果也纳入摘要。")
         preview=ttk.Label(self.summary_task,textvariable=self.preview_label,style="Muted.TLabel")
         preview.pack(fill="x",pady=px((0,6)))
         preview.bind("<Configure>",lambda e:preview.configure(wraplength=max(200,e.width)))
@@ -266,16 +319,16 @@ class App:
         actions.pack(fill="x")
         self.preview_button=ttk.Button(actions,text="1  预览数量",command=self.prepare)
         self.preview_button.pack(side="left",padx=px((0,8)))
-        self.generate_button=ttk.Button(actions,text="2  识别媒体并生成摘要",style="Primary.TButton",command=self.generate,state="disabled")
+        self.generate_button=ttk.Button(actions,text="2  生成摘要",style="Primary.TButton",command=self.generate,state="disabled")
         self.generate_button.pack(side="left")
-        export_hint=ttk.Label(self.export_task,text="只选一个聊天。图片／语音本机识别；视频等保留原件并标注未识别。可只识别，也可追加摘要。",style="Muted.TLabel")
+        export_hint=ttk.Label(self.export_task,text="只选一个聊天。不勾选识别时，无需模型即可保留原记录及可恢复媒体；缺失和未识别内容列入清单。",style="Muted.TLabel")
         export_hint.pack(fill="x",pady=px((0,6)))
         export_hint.bind("<Configure>",lambda e:export_hint.configure(wraplength=max(200,e.width)))
         export_actions=ttk.Frame(self.export_task,style="Card.TFrame")
         export_actions.pack(fill="x")
-        self.record_button=ttk.Button(export_actions,text="1  只识别并导出记录",command=self.export_records,state="disabled")
+        self.record_button=ttk.Button(export_actions,text="1  导出记录",command=self.export_records,state="disabled")
         self.record_button.pack(side="left",padx=px((0,8)))
-        self.export_summary_button=ttk.Button(export_actions,text="2  识别后生成摘要",style="Primary.TButton",command=lambda:self.export_records(summarize=True),state="disabled")
+        self.export_summary_button=ttk.Button(export_actions,text="2  导出并追加摘要",style="Primary.TButton",command=lambda:self.export_records(summarize=True),state="disabled")
         self.export_summary_button.pack(side="left")
 
         self.results_section=results=ttk.Frame(right,style="Panel.TFrame",padding=px(8))
@@ -292,11 +345,11 @@ class App:
         self.result_combo.bind("<<ComboboxSelected>>",lambda *_:self.show_report())
         self.result_actions=ttk.Frame(results,style="Card.TFrame")
         self.result_actions.pack(fill="x",pady=px((8,0)))
-        self.open_summary_button=ttk.Button(self.result_actions,text="打开完整摘要",command=self.open_summary,state="disabled")
+        self.open_summary_button=ttk.Button(self.result_actions,text="打开完整摘要",style="Primary.TButton",command=self.open_summary,state="disabled")
         self.save_summary_button=ttk.Button(self.result_actions,text="另存完整摘要包",style="Quiet.TButton",command=self.save_summary,state="disabled")
         self.summary_directory_button=ttk.Button(self.result_actions,text="打开摘要目录",style="Quiet.TButton",command=self.open_summary_directory,state="disabled")
         self.export_button=ttk.Button(self.result_actions,text="另存为Markdown",style="Quiet.TButton",command=self.export,state="disabled")
-        self.open_reading_button=ttk.Button(self.result_actions,text="打开阅读页",command=self.open_reading,state="disabled")
+        self.open_reading_button=ttk.Button(self.result_actions,text="打开阅读页",style="Primary.TButton",command=self.open_reading,state="disabled")
         self.open_export_button=ttk.Button(self.result_actions,text="打开导出目录",style="Quiet.TButton",command=self.open_export,state="disabled")
         self.result_more_button=ttk.Button(self.result_actions,text="更多",style="Quiet.TButton",command=self.toggle_result_more)
         self.advanced_results=False
@@ -388,10 +441,10 @@ class App:
         content.pack(fill="both",expand=True)
         ttk.Label(content,text="从选择到阅读，按顺序完成",style="Heading.TLabel").pack(anchor="w",pady=self.pixels((0,12)))
         self.guide_paragraphs=(
-            "一、模型（左侧）：选择模型与连接方式用于选择本地模型、云端API或会员模型并配置连接；登录ChatGPT会员用于授权本助手使用会员额度；检查云端连接仅发送内置虚构材料，验证连接和摘要能力，本地模式下不启用。",
+            "一、连接状态（左侧）：连接当前微信并核对已绑定账号。原记录导出无需模型；模型、媒体与连接方式用于按需配置摘要和媒体组件；登录ChatGPT会员用于授权本助手使用会员额度；检查云端连接仅发送内置虚构材料，验证连接和摘要能力，本地模式下不启用。",
             "二、聊天（左侧）：点击刷新读取列表，搜索后勾选需要处理的群聊或联系人。程序不会默认选择全部聊天。",
             "三、时间范围（右侧）：填写北京时间的开始／结束时间，结束时刻不包含在范围内；也可点击快捷日期。",
-            "四、开始处理（右侧）：生成摘要页先点击1预览数量，再点击2识别媒体并生成摘要。完整导出只能选择一个聊天：1只识别并导出记录，2识别后生成摘要（同时保留记录包）。",
+            "四、开始处理（右侧）：生成摘要页先点击1预览数量，再点击2生成摘要（媒体识别按勾选项执行）。完整导出只能选择一个聊天：1导出记录（无需模型），2导出并追加摘要（同时保留记录包）。",
             "五、查看结果（右侧）：结果自动保存在本机。打开完整摘要，可进入附带的原记录与媒体阅读页；另存完整摘要包保留附件，单独Markdown不能携带媒体。灰色按钮表示条件尚未满足或任务正在运行。",
             "预览不调用模型；图片和语音识别在本机，识别文本会随文字纳入所选摘要模型。云端每次需明确确认这些文本的发送。视频、文件等尚未理解的内容和缺失项会列出；机器注释与原文分开，结论仍需核对。失败后用相同聊天、范围、模型和设置重新预览，匹配的摘要检查点可复用。",
         )
@@ -544,10 +597,49 @@ class App:
             self.invalidate()
             self.render_chats()
 
-    def need_settings(self):
+    def need_settings(self,purpose="basic"):
         if not self.settings:
-            messagebox.showinfo("本机配置","请先填写微信读取组件和Ollama路径。",parent=self.root)
+            try:
+                if not self.config_path.exists():
+                    atomic_json(self.config_path,{"data_dir":str(self.config_path.parent/"private"),"provider_backend":"builtin","model_backend":"local"})
+                self.settings=Settings.load(self.config_path,purpose="basic")
+            except (ValueError,OSError) as error:
+                messagebox.showerror("本机配置需要处理",str(error),parent=self.root)
+                return False
+        try:
+            if self.config_path.is_file():Settings.load(self.config_path,purpose=purpose)
+        except (ValueError,OSError) as error:
+            messagebox.showinfo("请完成此操作所需配置",str(error),parent=self.root)
             return False
+        return True
+
+    def check_account(self):
+        from .provider import create_provider
+        from .account_guard import account_state
+        from .history import HistoryError
+        try:
+            state=account_state(create_provider(self.settings,self.settings.data_dir/"cache"))
+        except (HistoryError,OSError,ValueError,KeyError):
+            self.account_label.set("微信：尚未连接")
+            if self.settings.provider_backend=="builtin":self.connect_wechat()
+            else:messagebox.showinfo("外置接入需要处理","未能读取已有外置授权。请在连接设置中检查读取组件，或选择内置后端连接。",parent=self.root)
+            return False
+        self.account_label.set("已绑定："+state["account"]+" · "+{"matched":"当前账号已核对","mismatch":"账号不一致","offline":"微信未运行","unknown":"当前账号未确认"}[state["status"]])
+        if state["status"]=="mismatch" or (self.bound_account and self.bound_account!=state["binding"]):
+            self.selected.clear()
+            self.chats=[]
+            self.invalidate()
+            self.render_chats()
+            self.bound_account=None
+            self.offline_account=False
+            messagebox.showinfo("请重新连接微信","账号已改变。旧聊天选择已清空，请点击“连接当前微信”重新核对。",parent=self.root)
+            return False
+        offline=state["status"]!="matched"
+        if offline and not (self.offline_account and self.bound_account==state["binding"]):
+            if not messagebox.askyesno("确认本机记录所属账号","无法确认当前登录账号。\n已绑定："+state["account"]+"\n是否读取这个已授权账号的本机记录？如已切换微信账号，请取消并重新连接。",parent=self.root):
+                return False
+        self.bound_account=state["binding"]
+        self.offline_account=offline
         return True
 
     def run(self,command,job_id=None,private_output=None,destination=None,allow_cloud=False,member_account=None,summarize=False):
@@ -555,7 +647,7 @@ class App:
             return
         python=Path(sys.executable).with_name("python-local-only.exe")
         if not python.is_file():
-            messagebox.showinfo("本机安装未完成","请先点击“一、模型 → 初始化本项目运行程序”，再重试。此操作不修改Windows防火墙。",parent=self.root)
+            messagebox.showinfo("本机安装未完成","请先点击“一、连接状态 → 更多连接操作 → 初始化本项目运行程序”，再重试。此操作不修改Windows防火墙。",parent=self.root)
             return
         self.job_id=job_id
         self.active_command=command
@@ -582,6 +674,10 @@ class App:
             args += ["--summarize"]
         if member_account is not None:
             args += ["--member-account",member_account]
+        if self.bound_account:
+            args += ["--account-binding",self.bound_account]
+        if self.offline_account:
+            args += ["--offline-account"]
         self.settings.data_dir.mkdir(parents=True,exist_ok=True)
         logdir=self.settings.data_dir/"logs"
         logdir.mkdir(exist_ok=True)
@@ -605,14 +701,8 @@ class App:
         threading.Thread(target=consume,args=(self.active,),daemon=True).start()
 
     def refresh(self):
-        if self.need_settings() and not self.active:
-            if self.settings.provider_backend=="builtin":
-                from .builtin_provider import BuiltinProvider
-                from .history import HistoryError
-                try:BuiltinProvider(self.settings.data_dir,self.settings.data_dir/"cache")._access()
-                except (HistoryError,OSError,ValueError,KeyError):
-                    self.connect_wechat()
-                    return
+        if self.need_settings("reader") and not self.active:
+            if not self.check_account():return
             self.invalidate()
             self.run("list",private_output=self.settings.data_dir/"chat-list.json")
 
@@ -629,10 +719,11 @@ class App:
         self.access_dialog=AccessDialog(self,parent or self.root)
 
     def prepare(self):
-        if not self.need_settings() or not self.selected or self.active:
+        if not self.need_settings("reader") or not self.selected or self.active:
             if not self.selected:
                 messagebox.showinfo("请选择聊天","先勾选至少一个联系人或群聊。",parent=self.root)
             return
+        if not self.check_account():return
         try:
             start,end=parse_range(self.start.get(),self.end.get())
         except ValueError as error:
@@ -640,12 +731,16 @@ class App:
             return
         self.invalidate()
         job=uuid.uuid4().hex
-        atomic_json(self.settings.data_dir/"jobs"/job/"selection.json",{"ids":sorted(self.selected),"start":start,"end":end,"include_media":True})
+        atomic_json(self.settings.data_dir/"jobs"/job/"selection.json",{"ids":sorted(self.selected),"start":start,"end":end,
+                    "include_media":self.recognize_images.get() or self.recognize_voice.get(),
+                    "recognize_images":self.recognize_images.get(),"recognize_voice":self.recognize_voice.get(),
+                    "account_binding":self.bound_account,"offline_account":self.offline_account})
         self.prepared=None
         self.run("prepare",job)
 
     def generate(self):
         if self.prepared and not self.active:
+            if not self.need_settings("summary") or not self.media_settings():return
             cloud=self.settings.model_backend!="local"
             if cloud:
                 manifest=read_json(self.settings.data_dir/"jobs"/self.prepared/"manifest.json")
@@ -663,7 +758,7 @@ class App:
         return messagebox.askyesno("确认本次云端摘要",notice,parent=self.root)
 
     def cloud_test(self):
-        if self.active or not self.need_settings() or self.settings.model_backend=="local":
+        if self.active or not self.need_settings("summary") or self.settings.model_backend=="local":
             return
         notice="仅发送3条内置虚构文字及其摘要合并材料，不读取微信。\n服务：%s\n模型：%s\nAPI模式可能产生少量费用；会员模式使用现有额度。是否检查连接与摘要能力？"%(
             "OpenAI会员（共用计划额度）" if self.settings.model_backend=="membership" else self.settings.cloud_base_url,
@@ -687,24 +782,32 @@ class App:
         self.run(action,uuid.uuid4().hex,member_account=account)
 
     def export_records(self,summarize=False):
-        if self.active or not self.need_settings() or len(self.selected)!=1:
+        if self.active or not self.need_settings("reader") or len(self.selected)!=1:
             return
+        if not self.check_account() or not self.media_settings():return
+        if summarize and not self.need_settings("summary"):return
         try:
             start,end=parse_range(self.start.get(),self.end.get())
         except ValueError as error:
             messagebox.showerror("时间范围",str(error),parent=self.root)
             return
         cloud=summarize and self.settings.model_backend!="local"
-        if cloud and not self.confirm_cloud_summary({"chats":[{}],"include_media":True}):
+        if cloud and not self.confirm_cloud_summary({"chats":[{}],"include_media":self.recognize_images.get() or self.recognize_voice.get()}):
             return
         self.invalidate()
         job=uuid.uuid4().hex
         atomic_json(self.settings.data_dir/"jobs"/job/"selection.json",
-                    {"ids":sorted(self.selected),"start":start,"end":end})
+                    {"ids":sorted(self.selected),"start":start,"end":end,
+                     "recognize_images":self.recognize_images.get(),"recognize_voice":self.recognize_voice.get(),
+                     "account_binding":self.bound_account,"offline_account":self.offline_account})
         if summarize:
             self.run("export",job,summarize=True,allow_cloud=cloud)
         else:
             self.run("export",job)
+
+    def media_settings(self):
+        return ((not self.recognize_images.get() or self.need_settings("local")) and
+                (not self.recognize_voice.get() or self.need_settings("voice")))
 
     def open_export(self):
         if self.export_dir and not self.active:
@@ -733,7 +836,7 @@ class App:
         self.result_more_button.configure(state="disabled" if busy else "normal")
         self.cloud_test_button.configure(state="normal" if not busy and self.settings and self.settings.model_backend!="local" else "disabled")
         self.member_login_button.configure(state="disabled" if busy else "normal")
-        for button in (self.refresh_button,self.preview_button,self.config_button,self.history_button,*self.range_controls):
+        for button in (self.refresh_button,self.preview_button,self.config_button,self.history_button,self.connect_button,self.connection_more,self.runtime_button,*self.range_controls,*self.media_controls):
             button.configure(state="disabled" if busy else "normal")
         self.cancel_button.configure(state="normal" if busy else "disabled")
         self.generate_button.configure(state="normal" if not busy and self.prepared else "disabled")
@@ -1035,8 +1138,18 @@ class App:
         window.title("模型与本机设置 · 私有配置")
         window.transient(self.root)
         window.grab_set()
-        content=ttk.Frame(window,padding=15)
-        content.pack(fill="both",expand=True)
+        window.geometry(f"{min(self.pixels(760),self.root.winfo_screenwidth()-60)}x{min(self.pixels(720),self.root.winfo_screenheight()-90)}")
+        settings_actions=ttk.Frame(window,padding=self.pixels(10))
+        settings_actions.pack(side="bottom",fill="x")
+        settings_canvas=tk.Canvas(window,highlightthickness=0)
+        settings_scroll=ttk.Scrollbar(window,command=settings_canvas.yview)
+        settings_scroll.pack(side="right",fill="y")
+        settings_canvas.pack(fill="both",expand=True)
+        settings_canvas.configure(yscrollcommand=settings_scroll.set)
+        content=ttk.Frame(settings_canvas,padding=15)
+        content_id=settings_canvas.create_window(0,0,window=content,anchor="nw")
+        settings_canvas.bind("<Configure>",lambda e:settings_canvas.itemconfigure(content_id,width=e.width))
+        content.bind("<Configure>",lambda e:settings_canvas.configure(scrollregion=settings_canvas.bbox("all")))
         values=read_json(self.config_path) if self.config_path.is_file() else {}
         backend=tk.StringVar(value=values.get("model_backend","local"))
         model_choice=ttk.LabelFrame(content,text="文字摘要模型",padding=8)
@@ -1205,12 +1318,9 @@ class App:
                 temp=self.config_path.with_suffix(".validate.json")
                 atomic_json(temp,data)
                 try:
-                    settings=Settings.load(temp)
+                    settings=Settings.load(temp,purpose="basic")
                 finally:
                     temp.unlink(missing_ok=True)
-                if settings.model_backend!="local":
-                    from .cloud import ensure_cloud_interpreter
-                    ensure_cloud_interpreter()
                 atomic_json(self.config_path,data)
                 self.settings=settings
                 self.selected.clear()
@@ -1220,14 +1330,15 @@ class App:
                 self.status.set("配置已保存，未发送聊天。请点击刷新、选择范围并预览。")
             except Exception as error:
                 messagebox.showerror("配置无效",str(error),parent=window)
-        ttk.Button(content,text="保存配置（不发送聊天）",command=save).pack(anchor="e")
+        ttk.Button(settings_actions,text="保存配置（不发送聊天）",style="Primary.TButton",command=save).pack(side="right")
+        ttk.Button(settings_actions,text="关闭",command=window.destroy).pack(side="left")
         if initial_tab:
             tabs.select(reader_tab if initial_tab=="reader" else {"local":local_tab,"cloud":cloud_tab,"membership":member_tab}.get(backend.get(),local_tab))
 
     def update_model_label(self):
-        self.model_label.set("文字摘要：会员 · "+(self.settings.membership_model or "登录后选模型") if self.settings.model_backend=="membership"
+        self.model_label.set("文字摘要配置：会员 · "+(self.settings.membership_model or "登录后选模型") if self.settings.model_backend=="membership"
                              else "文字摘要：云端 · "+self.settings.cloud_model if self.settings.model_backend=="cloud"
-                             else "文字摘要：本地 · "+self.settings.model)
+                             else "文字摘要：本地 · "+self.settings.model if self.settings.model else "文字摘要：未配置（原记录导出不需要）")
         self.cloud_test_button.configure(state="normal" if self.settings.model_backend!="local" and not self.active else "disabled")
 
 

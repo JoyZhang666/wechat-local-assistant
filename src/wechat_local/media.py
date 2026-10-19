@@ -15,9 +15,12 @@ class MediaError(RuntimeError):
 
 
 class MediaResolver:
-    def __init__(self,provider,model,job_dir,progress=None):
+    def __init__(self,provider,model,job_dir,progress=None,*,settings=None,images=True,voice=True):
         self.provider=provider
         self.model=model
+        self.settings=settings if settings is not None else model.settings
+        self.recognize_images=images
+        self.recognize_voice=voice
         self.job_dir=Path(job_dir)
         self.progress=progress
         self.account_root=None
@@ -57,7 +60,7 @@ class MediaResolver:
             try:
                 if not self.image_keys_loaded:
                     from .image_keys import ImageKeyStore
-                    data_dir=getattr(self.model.settings,'data_dir',None)
+                    data_dir=getattr(self.settings,'data_dir',None)
                     if isinstance(data_dir,(str,Path)):
                         try:self.image_keys=ImageKeyStore(data_dir).load()
                         except Exception:raise MediaError('image_key_store_invalid') from None
@@ -107,6 +110,8 @@ class MediaResolver:
         return [{"path":str(present[0]),"name":present[0].name,"kind":message["kind"],"quality":"original"}]
 
     def annotate(self,message,assets):
+        if not (self.recognize_images if message['kind']=='image' else self.recognize_voice):
+            return {"status":"missing","error_code":"recognition_not_requested"}
         self.processed+=1
         if self.progress:
             self.progress({"phase":"recognizing","current":self.processed,
@@ -121,12 +126,12 @@ class MediaResolver:
         available=[x for x in assets if x["kind"]=="voice_audio"]
         if not available:
             return {"status":"error","error_code":"decoded_voice_missing"}
-        if not self.model.settings.asr_model_dir:
+        if not self.settings.asr_model_dir:
             return {"status":"error","error_code":"voice_transcription_not_configured"}
         self.model.stop()
         if self.asr is None:
             from .asr import LocalASR
-            self.asr=LocalASR(self.model.settings.asr_model_dir,
+            self.asr=LocalASR(self.settings.asr_model_dir,
                               work_dir=self.job_dir/"snapshot"/"asr-work")
         return self.asr.transcribe(available[0]["path"])
 

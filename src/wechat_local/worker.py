@@ -108,6 +108,8 @@ def execute(args,settings,progress):
         progress({"phase":"reading","message":"读取本机聊天记录；此阶段不加载模型。"})
         with NamedMutex(READ_LOCK):
             provider=create_provider(settings,settings.data_dir/"cache")
+            from .account_guard import require_account
+            require_account(provider,getattr(args,"account_binding",None),getattr(args,"offline_account",False))
             reader=HistoryReader(provider.snapshot())
             if args.command=="list":
                 chats=reader.list_chats()
@@ -118,6 +120,8 @@ def execute(args,settings,progress):
             manifest=reader.prepare_selection(selection["ids"],selection["start"],selection["end"],snapshot,
                 include_media=bool(selection.get("include_media",False)))
             manifest.update(start=selection["start"],end=selection["end"],snapshot_end=selection["end"])
+            for name in ("recognize_images","recognize_voice","account_binding","offline_account"):
+                if name in selection:manifest[name]=selection[name]
             atomic_json(job/"manifest.json",manifest)
             return {"phase":"prepared","success":True,"job_id":args.job,
                     "total_text":manifest["total_text"],"total_skipped":manifest["total_skipped"],
@@ -132,10 +136,14 @@ def execute(args,settings,progress):
         progress({"phase":"reading","message":"读取所选聊天全部消息和媒体线索。"})
         with NamedMutex(READ_LOCK):
             provider=create_provider(settings,settings.data_dir/"cache")
+            from .account_guard import require_account
+            require_account(provider,selection.get("account_binding"),selection.get("offline_account",False))
             manifest=HistoryReader(provider.snapshot()).prepare_export(selection["ids"][0],
                 selection["start"],selection["end"],job/"snapshot")
-        model=LocalModel(settings,job)
-        resolver=MediaResolver(provider,model,job,progress)
+        images=selection.get("recognize_images",False)
+        voice=selection.get("recognize_voice",False)
+        model=LocalModel(settings,job) if images or voice else None
+        resolver=MediaResolver(provider,model,job,progress,settings=settings,images=images,voice=voice)
         output=inside(settings.data_dir/"exports"/args.job,settings.data_dir)
         with NamedMutex(MODEL_LOCK):
             try:
@@ -151,7 +159,7 @@ def execute(args,settings,progress):
                 try:
                     resolver.close()
                 finally:
-                    model.stop()
+                    if model is not None:model.stop()
                     if not append_summary:
                         clean_snapshot(job)
         from .media_summary import summary_input
@@ -166,7 +174,9 @@ def execute(args,settings,progress):
         from .media_summary import recognize_selection,summary_input
         local=LocalModel(settings,job)
         provider=create_provider(settings,settings.data_dir/"cache")
-        resolver=MediaResolver(provider,local,job,progress)
+        from .account_guard import require_account
+        require_account(provider,manifest.get("account_binding"),manifest.get("offline_account",False))
+        resolver=MediaResolver(provider,local,job,progress,images=manifest.get("recognize_images",True),voice=manifest.get("recognize_voice",True))
         with NamedMutex(MODEL_LOCK):
             try:
                 archives=recognize_selection(manifest,settings.data_dir/"exports"/args.job,job/"snapshot",resolver,progress)
@@ -265,6 +275,8 @@ def main(argv=None):
     parser.add_argument("--destination",type=Path)
     parser.add_argument("--allow-cloud",action="store_true",help="仅本次文字摘要允许发送选定材料到已配置云端接口")
     parser.add_argument("--summarize",action="store_true",help="完整记录识别后追加摘要；云端仍需--allow-cloud")
+    parser.add_argument("--account-binding",help="本次确认的绑定账号指纹，不是密钥")
+    parser.add_argument("--offline-account",action="store_true",help="明确读取已确认绑定账号的本机记录")
     parser.add_argument("--member-account",help=argparse.SUPPRESS)
     parser.add_argument("--gui-channel",action="store_true",help=argparse.SUPPRESS)
     args=parser.parse_args(argv)
@@ -276,7 +288,15 @@ def main(argv=None):
     log=None
     settings=None
     try:
-        settings=Settings.load(args.config)
+        purpose="reader" if args.command in ("list","prepare","export") else "summary" if args.command in ("generate","cloud-test") else "basic"
+        settings=Settings.load(args.config,purpose=purpose)
+        if args.command in ("export","generate") and args.job:
+            source=task_path(settings,args.job)/("selection.json" if args.command=="export" else "manifest.json")
+            choice=read_json(source)
+            if args.command=="export" and args.summarize:Settings.load(args.config,purpose="summary")
+            if args.command=="export" or choice.get("include_media"):
+                if choice.get("recognize_images",args.command=="generate"):Settings.load(args.config,purpose="local")
+                if choice.get("recognize_voice",args.command=="generate"):Settings.load(args.config,purpose="voice")
         if args.command in ("prepare","generate","export","save-export","render-summary","save-summary","cloud-test","member-login","member-models","member-logout","cancel") and not args.job:
             raise ValueError("本命令需要已创建的本机任务编号。")
         settings.data_dir.mkdir(parents=True,exist_ok=True)

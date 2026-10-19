@@ -1,6 +1,6 @@
 TECHNICAL-USER SOURCE RELEASE — WINDOWS
 
-Version: v1.13.0
+Version: v1.14.0-rc.1
 
 This source package was built from an explicit file allowlist.
 It excludes private configuration, keys, chat data, reports, models, runtime,

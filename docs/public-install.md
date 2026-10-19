@@ -1,6 +1,6 @@
 # Windows安装与首次接入
 
-版本：v1.13.0；2026-10-17（Asia/Shanghai）；技术用户源码正式版。
+版本：v1.14.0-rc.1；2026-10-17（Asia/Shanghai）；技术用户源码候选版。
 
 ## 安装
 
@@ -13,7 +13,7 @@ python -m venv .venv
 .venv\Scripts\pythonw-local-only.exe scripts/wechat_ui.py gui
 ```
 
-第三步不能省略：只创建本项目专用Python和必要运行库，不修改防火墙或自启；已有文件版本不同拒绝覆盖。已打开界面也可点击“一、模型 → 初始化本项目运行程序”。辅助接入另装`requirements-access.txt`；会员另装`requirements-membership.txt`；SILK另装`requirements-voice.txt`；可选Silero CPU VAD另装`requirements-asr.txt`。均使用本项目venv的pip；不自动下载模型。
+第三步不能省略：只创建本项目专用Python和必要运行库，不修改防火墙或自启；已有文件版本不同拒绝覆盖。已打开界面也可点击“一、连接状态 → 更多连接操作 → 初始化本项目运行程序”。辅助接入另装`requirements-access.txt`；会员另装`requirements-membership.txt`；SILK另装`requirements-voice.txt`；可选Silero CPU VAD另装`requirements-asr.txt`。均使用本项目venv的pip；不自动下载模型。
 
 ## 六步新手引导
 
@@ -25,7 +25,7 @@ python -m venv .venv
 
 ## 首次数据库接入
 
-先在“选择模型与连接方式”保存私人数据目录及所选模型设置；“微信首次接入”选内置后端，保存后重新打开。
+首次直接点“连接当前微信”即可建立基础配置；普通流程不需要先配模型。模型、媒体和高级读取后端可在设置中按需填写。
 
 正常打开并登录Windows微信，保持运行，在助手点“连接／刷新”。程序自动识别微信程序、账号及记录位置，优先复用已保存授权；首次只需确认本机授权，不需要查找目录、程序或填写账号ID，也不要求先退出重开。成功自动加载聊天列表。具体范围见[首次接入与媒体组件](first-access.md)。
 
@@ -39,7 +39,7 @@ python -m venv .venv
 - API：支持Chat Completions及JSON模式，填写HTTPS Base URL（如`https://api.example.com/v1`）、模型与Key。变更地址需重填Key，独立计费。
 - 会员：安装会员依赖，在官方页面亲自登录、授予订阅额度权限；返回设置页选账户和返回模型，保存后点击“检查云端连接”。不导入其他工具的凭据。
 
-云端使用本应用独立的按需请求解释器，保存设置时校验并创建，不修改共享程序。保存后可创建专用GUI快捷方式：
+云端使用本应用独立的按需请求解释器，首次使用云端功能时校验并创建，不修改共享程序。保存后可创建专用GUI快捷方式：
 
 ```powershell
 .venv\Scripts\python.exe scripts/create_gui_launcher.py --config "$env:LOCALAPPDATA/WechatLocalAssistant/settings.json"
@@ -57,4 +57,4 @@ python -m venv .venv
 
 ## 日常验收
 
-先检查模型连接，再选择聊天／时间、预览、摘要或导出。云端连接检查只发送内置虚构材料，不读取微信。结束时间不包含，48／72小时快捷项滚动计算。打开完整HTML核查人物、日期、否定、引用和缺口，另存整个文件夹。取消／退出后检查本程序启动的模型与请求进程释放，不结束其他程序的模型进程。新机器仍需本人真实验收；开发机测试不替代它。
+先连接微信并核对账号，再选择聊天／时间。仅生成摘要和识别媒体时需要对应模型；原记录导出无需模型。云端连接检查只发送内置虚构材料，不读取微信。结束时间不包含，48／72小时快捷项滚动计算。打开完整HTML核查人物、日期、否定、引用和缺口，另存整个文件夹。取消／退出后检查本程序启动的模型与请求进程释放，不结束其他程序的模型进程。新机器仍需本人真实验收；开发机测试不替代它。

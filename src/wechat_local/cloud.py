@@ -121,8 +121,12 @@ class CloudModel:
         self.last_transport_diagnostic={}
         interpreter=Path(sys.executable).with_name("python-cloud-api.exe")
         if not interpreter.is_file():
-            self.last_error="请重新保存云端模型配置，创建专属API解释器。"
-            raise ValueError("请先在模型设置中保存云端配置，创建专属API解释器。")
+            try:
+                interpreter=ensure_cloud_interpreter()
+            except (OSError,ValueError) as error:
+                self.last_error="云端运行组件初始化失败："+str(error)
+                self.last_error_code="cloud_runtime_setup_failed"
+                raise ValueError(self.last_error) from None
         script=Path(__file__).resolve().parents[2]/"scripts"/"cloud_api_worker.py"
         process=self.process=subprocess.Popen([str(interpreter),"-B","-X","utf8",str(script)],stdin=subprocess.PIPE,
                    stdout=subprocess.PIPE,stderr=subprocess.DEVNULL,text=True,encoding="utf-8",

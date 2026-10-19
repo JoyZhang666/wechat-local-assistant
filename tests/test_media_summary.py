@@ -114,7 +114,7 @@ class MediaSummaryTests(unittest.TestCase):
         for append in (False,True):
             with self.subTest(append=append):
                 job=self.root/"jobs"/(("b" if append else "c")*32)
-                atomic_json(job/"selection.json",{"ids":["fake-room"],"start":100,"end":200})
+                atomic_json(job/"selection.json",{"ids":["fake-room"],"start":100,"end":200,"recognize_images":True,"recognize_voice":True})
                 snapshot=job/"snapshot"
                 snapshot.mkdir()
                 path=snapshot/"records.jsonl"
@@ -122,7 +122,7 @@ class MediaSummaryTests(unittest.TestCase):
                 frozen={**self.frozen,"messages_file":str(path)}
                 model=Mock(); model.infer.side_effect=FakeInfer()
                 events=[]
-                with patch("wechat_local.provider.WechatProvider"),patch("wechat_local.history.HistoryReader") as reader,\
+                with patch("wechat_local.account_guard.require_account"),patch("wechat_local.provider.WechatProvider"),patch("wechat_local.history.HistoryReader") as reader,\
                      patch("wechat_local.model.LocalModel",return_value=model),patch("wechat_local.media.MediaResolver") as resolver:
                     reader.return_value.prepare_export.return_value=frozen
                     resolver.return_value.resolve.return_value=[]
@@ -152,7 +152,7 @@ class MediaSummaryTests(unittest.TestCase):
             order.append("summary")
             return infer(prompt)
         model.infer.side_effect=summarize
-        with patch("wechat_local.provider.WechatProvider") as provider,patch("wechat_local.model.LocalModel",return_value=model),\
+        with patch("wechat_local.account_guard.require_account"),patch("wechat_local.provider.WechatProvider") as provider,patch("wechat_local.model.LocalModel",return_value=model),\
              patch("wechat_local.media.MediaResolver") as resolver:
             resolver.return_value.resolve.return_value=[{"path":str(self.asset),"kind":"image","quality":"original"}]
             def recognize(message,assets):
@@ -166,6 +166,29 @@ class MediaSummaryTests(unittest.TestCase):
         self.assertTrue(model.stop.called)
         self.assertFalse(snapshot.exists())
         self.assertTrue(Path(result["result_path"]).parent.joinpath("records/chat-001/media").is_dir())
+
+    def test_raw_export_preserves_assets_without_constructing_any_model(self):
+        job=self.root/"jobs"/("e"*32)
+        atomic_json(job/"selection.json",{"ids":["fake-room"],"start":100,"end":200,
+                    "recognize_images":False,"recognize_voice":False})
+        snapshot=job/"snapshot"
+        snapshot.mkdir()
+        path=snapshot/"records.jsonl"
+        path.write_bytes(self.source.read_bytes())
+        frozen={**self.frozen,"messages_file":str(path)}
+        with patch("wechat_local.account_guard.require_account"),patch("wechat_local.provider.WechatProvider"),\
+             patch("wechat_local.history.HistoryReader") as reader,\
+             patch("wechat_local.media.MediaResolver.resolve",return_value=[{"path":str(self.asset),"kind":"image","quality":"original"}]),\
+             patch("wechat_local.model.LocalModel",side_effect=AssertionError("raw export must not construct a model")) as model:
+            reader.return_value.prepare_export.return_value=frozen
+            result=execute(SimpleNamespace(command="export",job=job.name,summarize=False,allow_cloud=False),self.settings,lambda _:None)
+        model.assert_not_called()
+        directory=Path(result["result_path"]).parent
+        self.assertEqual([json.loads(line) for line in (directory/"messages.jsonl").read_text(encoding="utf-8").splitlines()],self.rows)
+        self.assertTrue(list((directory/"media").iterdir()))
+        self.assertIn('<img ',(directory/"index.html").read_text(encoding="utf-8"))
+        annotations=[json.loads(line) for line in (directory/"annotations.jsonl").read_text(encoding="utf-8").splitlines()]
+        self.assertTrue(all(x["status"]=="missing" for x in annotations))
 
     def test_damaged_media_copy_is_not_declared_preserved(self):
         archive=self.archive()

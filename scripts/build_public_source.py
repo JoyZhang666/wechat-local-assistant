@@ -26,6 +26,7 @@ REQUIRED = (
     "docs/release-notes.md",
 )
 OPTIONAL = (
+    "tests/test_operation_readiness.py", "docs/images/summary-overview.svg",
     "docs/public-install.md", "tests/test_history.py", "tests/test_selected_summary.py",
     "tests/test_gui_workflow.py", "tests/test_model_runtime.py", "tests/test_export.py",
     "tests/test_media.py", "tests/test_voice.py", "tests/test_image.py", "tests/test_asr.py",
